@@ -112,7 +112,7 @@ const LoginPage = () => {
               </span>
               <input
                 type="email"
-                placeholder="seu@email.com"
+                placeholder="Insira seu Email"
                 className="input input-bordered w-full focus:border-green-500"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}

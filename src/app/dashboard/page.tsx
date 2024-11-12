@@ -102,7 +102,7 @@ export default function Dashboard() {
         }
     }, [user, authLoading]);
 
-    const totalEmprestado = emprestimos.reduce((acc, emp) => acc + emp.valor, 0);
+    const totalEmprestado = emprestimos.reduce((acc, emp) => acc + parseFloat(emp.valor.replace(',', '.')), 0);
     const totalClientes = clientes.length;
     const clientesListaNegra = listaNegra.filter(item => item.ativo).length;
     const parcelasAtrasadas = emprestimos.filter(

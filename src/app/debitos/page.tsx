@@ -1,18 +1,9 @@
-'use client'
+'use client';
 
 import React, { useState, useEffect } from 'react';
 import { AlertTriangle, Search, ChevronUp, ChevronDown, Mail, AlertCircle, CheckCircle, XCircle, ArrowUp, ArrowDown, ChevronRight } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
-import {
-  collection,
-  query,
-  where,
-  getDocs,
-  doc,
-  updateDoc,
-  orderBy,
-  getFirestore
-} from 'firebase/firestore';
+import { collection, query, where, getDocs, getDoc, doc, updateDoc, orderBy, getFirestore } from 'firebase/firestore';
 import { getAuth, onAuthStateChanged } from 'firebase/auth';
 import './styles.css';
 
@@ -32,6 +23,7 @@ const db = getFirestore(app);
 const auth = getAuth(app);
 
 const DebitsPage = () => {
+  const [empresaId, setEmpresaId] = useState(null);
   const [clients, setClients] = useState([]);
   const [filteredClients, setFilteredClients] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -41,64 +33,11 @@ const DebitsPage = () => {
   const [showModal, setShowModal] = useState(false);
   const [emailMessage, setEmailMessage] = useState('');
   const [showEmailModal, setShowEmailModal] = useState(false);
-  
-  // Fetch clients and their debts
+
   useEffect(() => {
-    const fetchClients = async (empresaId) => {
-      console.log(`Iniciando busca de clientes para empresaId: ${empresaId}`);
-      try {
-        const clientsRef = collection(db, `empresas/${empresaId}/clientes`);
-        const emprestimosRef = collection(db, `empresas/${empresaId}/emprestimos`);
-        const listanegraRef = collection(db, `empresas/${empresaId}/lista_negra`);
-
-        // Get all clients
-        const clientsSnapshot = await getDocs(clientsRef);
-        const clientsData = {};
-        clientsSnapshot.forEach((doc) => {
-          clientsData[doc.id] = { id: doc.id, ...doc.data(), emprestimos: [] };
-        });
-        console.log("Clientes carregados:", clientsData);
-
-        // Get lista negra status
-        const listanegraSnapshot = await getDocs(listanegraRef);
-        const listanegraData = {};
-        listanegraSnapshot.forEach((doc) => {
-          const data = doc.data();
-          if (data.ativo) {
-            listanegraData[data.clienteId] = true;
-          }
-        });
-        console.log("Status de lista negra carregado:", listanegraData);
-
-        // Get all emprestimos
-        const emprestimosSnapshot = await getDocs(emprestimosRef);
-        emprestimosSnapshot.forEach((doc) => {
-          const emprestimo = doc.data();
-          if (clientsData[emprestimo.cliente]) {
-            clientsData[emprestimo.cliente].emprestimos.push({
-              id: doc.id,
-              ...emprestimo,
-              nalistanegra: listanegraData[emprestimo.cliente] || false
-            });
-          }
-        });
-        console.log("Empréstimos carregados e associados aos clientes:", clientsData);
-
-        const clientsArray = Object.values(clientsData).filter(
-          client => client.emprestimos.length > 0
-        );
-        setClients(clientsArray);
-        setFilteredClients(clientsArray);
-        setLoading(false);
-      } catch (error) {
-        console.error('Erro ao carregar dados:', error);
-        setLoading(false);
-      }
-    };
-
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       if (user) {
-        console.log("Usuário autenticado:", user.uid);
+        setEmpresaId(user.uid);
         fetchClients(user.uid);
       } else {
         console.warn("Usuário não autenticado");
@@ -108,51 +47,91 @@ const DebitsPage = () => {
     return () => unsubscribe();
   }, []);
 
-  // Filter and sort functions
-  useEffect(() => {
-    console.log("Aplicando filtros e ordenação nos clientes");
-    let filtered = [...clients];
-    
-    if (searchTerm) {
-      filtered = filtered.filter(client =>
-        client.nome.toLowerCase().includes(searchTerm.toLowerCase())
-      );
-      console.log(`Clientes filtrados com termo "${searchTerm}":`, filtered);
-    }
-    
-    filtered.sort((a, b) => {
-      const dateA = new Date(a.emprestimos[0]?.data_criacao);
-      const dateB = new Date(b.emprestimos[0]?.data_criacao);
-      return sortOrder === 'asc' ? dateA - dateB : dateB - dateA;
-    });
-    console.log(`Clientes ordenados (${sortOrder}):`, filtered);
-
-    setFilteredClients(filtered);
-  }, [searchTerm, sortOrder, clients]);
-
-  const handleUpdateParcelaStatus = async (empresaId, emprestimo, parcelaIndex, newStatus) => {
-    console.log("Iniciando atualização:", { empresaId, emprestimo, parcelaIndex, newStatus });
-
+  const fetchClients = async (empresaId) => {
     try {
-      const empresaId = user.uid; // Replace with actual ID
+      const clientsRef = collection(db, `empresas/${empresaId}/clientes`);
+      const emprestimosRef = collection(db, `empresas/${empresaId}/emprestimos`);
+      const listanegraRef = collection(db, `empresas/${empresaId}/lista_negra`);
+
+      const clientsSnapshot = await getDocs(clientsRef);
+      const clientsData = {};
+      clientsSnapshot.forEach((doc) => {
+        clientsData[doc.id] = { id: doc.id, ...doc.data(), emprestimos: [] };
+      });
+
+      const listanegraSnapshot = await getDocs(listanegraRef);
+      const listanegraData = {};
+      listanegraSnapshot.forEach((doc) => {
+        const data = doc.data();
+        if (data.ativo) {
+          listanegraData[data.clienteId] = true;
+        }
+      });
+
+      const emprestimosSnapshot = await getDocs(emprestimosRef);
+      emprestimosSnapshot.forEach((doc) => {
+        const emprestimo = doc.data();
+        if (clientsData[emprestimo.cliente]) {
+          clientsData[emprestimo.cliente].emprestimos.push({
+            id: doc.id,
+            ...emprestimo,
+            nalistanegra: listanegraData[emprestimo.cliente] || false
+          });
+        }
+      });
+
+      const clientsArray = Object.values(clientsData).filter(client => client.emprestimos.length > 0);
+      setClients(clientsArray);
+      setFilteredClients(clientsArray);
+      setLoading(false);
+    } catch (error) {
+      console.error('Erro ao carregar dados:', error);
+      setLoading(false);
+    }
+  };
+
+  const handleUpdateParcelaStatus = async (emprestimo, parcelaIndex, newStatus) => {
+    if (!empresaId || !emprestimo?.id) {
+      console.warn("empresaId ou emprestimoId ausente.");
+      return;
+    }
+    try {
       const emprestimosRef = doc(db, `empresas/${empresaId}/emprestimos/${emprestimo.id}`);
-            
+      const empresaRef = doc(db, `empresas/${empresaId}`);
+  
+      // Converter o valor da parcela para Number
+      const parcelaValor = Number(emprestimo.parcelas[parcelaIndex].valor);
       const updatedParcelas = [...emprestimo.parcelas];
+      const oldStatus = updatedParcelas[parcelaIndex].status;
+  
+      // Atualizar o status da parcela
       updatedParcelas[parcelaIndex] = {
         ...updatedParcelas[parcelaIndex],
         status: newStatus
       };
-      console.log("Parcelas atualizadas:", updatedParcelas);
-
+  
+      // Obter valor_emprestimo atual e ajustar conforme o novo status
+      const empresaSnap = await getDoc(empresaRef);
+      let valorEmprestimoAtual = empresaSnap.data().valor_emprestimo || 0;
+  
+      if (newStatus === 'Paga' && oldStatus !== 'Paga') {
+        valorEmprestimoAtual += parcelaValor;
+      } else if (newStatus === 'Pendente' && oldStatus === 'Paga') {
+        valorEmprestimoAtual -= parcelaValor;
+      }
+  
       const parcelasPagas = updatedParcelas.filter(p => p.status === 'Paga').length;
-
+  
+      // Atualizar os documentos no Firestore
       await updateDoc(emprestimosRef, {
         parcelas: updatedParcelas,
         parcelas_pagas: parcelasPagas.toString()
       });
-      console.log("Documento de empréstimo atualizado com sucesso:", emprestimosRef.id);
-
-      // Update local state
+      await updateDoc(empresaRef, {
+        valor_emprestimo: valorEmprestimoAtual
+      });
+  
+      // Atualizar o estado do cliente selecionado
       const updatedClients = clients.map(client => {
         if (client.id === selectedClient.id) {
           const updatedEmprestimos = client.emprestimos.map(emp => {
@@ -169,20 +148,20 @@ const DebitsPage = () => {
         }
         return client;
       });
-
+  
       setClients(updatedClients);
       setSelectedClient(updatedClients.find(c => c.id === selectedClient.id));
+  
     } catch (error) {
       console.error('Erro ao atualizar parcela:', error);
     }
   };
-
-  const sendEmail = async () => {
-    console.log("Enviando email com mensagem:", emailMessage);
-    alert('Email enviado com sucesso!');
-    setShowEmailModal(false);
-    setEmailMessage('');
+  
+  const parseDateString = (dateStr) => {
+    const [day, month, year] = dateStr.split('/');
+    return new Date(`${year}-${month}-${day}`);
   };
+
 
   if (loading) {
     return (
@@ -191,6 +170,7 @@ const DebitsPage = () => {
       </div>
     );
   }
+
 
   return (
     <div className="p-4 max-w-7xl mx-auto fade-in">
@@ -229,7 +209,6 @@ const DebitsPage = () => {
             key={client.id}
             className="card bg-base-100 shadow-xl hover:shadow-2xl transition-all duration-300 hover:scale-[1.01] cursor-pointer"
             onClick={() => {
-              console.log("Cliente selecionado:", client);
               setSelectedClient(client);
               setShowModal(true);
             }}
@@ -260,8 +239,8 @@ const DebitsPage = () => {
 
       {/* Client Details Modal */}
       {showModal && selectedClient && (
-        <div className="modal modal-open">
-          <div className="modal-box max-w-4xl">
+  <div className="modal modal-open" onClick={() => setShowModal(false)}>
+    <div className="modal-box max-w-4xl" onClick={(e) => e.stopPropagation()}>
             <h3 className="font-bold text-lg mb-4 flex items-center gap-2">
               {selectedClient.nome}
               {selectedClient.nalistanegra && (
@@ -309,7 +288,7 @@ const DebitsPage = () => {
                         <tr key={idx}>
                           <td>{parcela.numero}</td>
                           <td>R$ {parcela.valor}</td>
-                          <td>{new Date(parcela.data).toLocaleDateString()}</td>
+                          <td>{parseDateString(parcela.data).toLocaleDateString()}</td>
                           <td>
                             <span className={`badge ${
                               parcela.status === 'Paga' ? 'badge-success' : 'badge-warning'
@@ -326,7 +305,6 @@ const DebitsPage = () => {
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   handleUpdateParcelaStatus(
-                                    empresaId,
                                     emprestimo,
                                     idx,
                                     parcela.status === 'Paga' ? 'Pendente' : 'Paga'

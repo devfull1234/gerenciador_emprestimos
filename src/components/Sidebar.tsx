@@ -1,10 +1,9 @@
-'use client';
-
 import React, { useState } from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
+  FiBriefcase,
   FiHome,
   FiUserPlus,
   FiDollarSign,
@@ -14,9 +13,10 @@ import {
   FiMenu,
   FiX,
   FiLogOut,
-  FiChevronDown,
+  FiLock
 } from 'react-icons/fi';
 import './sidebar.css';
+import { useAuth } from '../hooks/useAuth';
 
 interface SidebarProps {
   userName?: string;
@@ -27,8 +27,15 @@ const Sidebar = ({ userName = "Usuário", userRole = "Admin" }: SidebarProps) =>
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [isMobileOpen, setIsMobileOpen] = useState(false);
   const pathname = usePathname();
+  const { logout } = useAuth();
+  const router = useRouter();
 
   const menuItems = [
+    { 
+      title: 'Empresa',
+      icon: <FiBriefcase className="w-5 h-5" />,
+      path: '/pagina_empresa',
+    },
     { 
       title: 'Dashboard',
       icon: <FiHome className="w-5 h-5" />,
@@ -55,10 +62,11 @@ const Sidebar = ({ userName = "Usuário", userRole = "Admin" }: SidebarProps) =>
       path: '/relatorio',
     },
     {
-      title: 'Score',
+      title: 'Inadimplentes',
       icon: <FiActivity className="w-5 h-5" />,
-      path: '/score',
-    },
+      path: '/lista_negra',
+      unavailable: true,
+    }
   ];
 
   const sidebarVariants = {
@@ -69,6 +77,15 @@ const Sidebar = ({ userName = "Usuário", userRole = "Admin" }: SidebarProps) =>
   const mobileMenuVariants = {
     open: { x: 0 },
     closed: { x: '-100%' },
+  };
+
+  const handleLogout = async () => {
+    try {
+      await logout();
+      router.push('/login'); // Redireciona para a tela de login após logout
+    } catch (error) {
+      console.error('Erro ao fazer logout:', error);
+    }
   };
 
   return (
@@ -143,12 +160,14 @@ const Sidebar = ({ userName = "Usuário", userRole = "Admin" }: SidebarProps) =>
               {menuItems.map((item) => (
                 <li key={item.path}>
                   <Link
-                    href={item.path}
+                    href={item.unavailable ? '#' : item.path}
                     className={`flex items-center p-3 rounded-lg transition-all duration-200 
+                      ${item.unavailable ? 'opacity-50 cursor-not-allowed' : ''}
                       ${pathname === item.path
                         ? 'bg-green-100 text-green-600 dark:bg-green-900 dark:text-green-300'
                         : 'hover:bg-green-50 dark:hover:bg-green-900/50'
                       }`}
+                    onClick={item.unavailable ? (e) => e.preventDefault() : undefined}
                   >
                     <div className="flex items-center space-x-3">
                       {item.icon}
@@ -161,6 +180,7 @@ const Sidebar = ({ userName = "Usuário", userRole = "Admin" }: SidebarProps) =>
                           {item.title}
                         </motion.span>
                       )}
+                      {item.unavailable && <FiLock className="w-4 h-4 ml-2" />}
                     </div>
                   </Link>
                 </li>
@@ -170,8 +190,11 @@ const Sidebar = ({ userName = "Usuário", userRole = "Admin" }: SidebarProps) =>
 
           {/* Logout Button */}
           <div className="p-4 border-t border-gray-200 dark:border-gray-700">
-            <button className="btn btn-outline btn-error w-full flex items-center justify-center gap-2">
-              <FiLogOut />
+            <button 
+              onClick={handleLogout}
+              className="btn btn-outline btn-error w-full flex items-center justify-center gap-2 hover:bg-red-500 hover:text-white transition-colors duration-200"
+            >
+              <FiLogOut className="w-5 h-5" />
               {!isCollapsed && <span>Sair</span>}
             </button>
           </div>

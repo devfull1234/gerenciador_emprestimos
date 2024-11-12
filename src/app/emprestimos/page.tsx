@@ -300,7 +300,7 @@ export default function EmprestimosPage() {
                                     <label className="label">
                                         <span className="label-text flex items-center gap-2">
                                             <DollarSign className="w-4 h-4" />
-                                            Valor
+                                            Valor (Adicione somente números)
                                         </span>
                                     </label>
                                     <div className="relative">
