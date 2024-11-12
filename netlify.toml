@@ -1,7 +1,7 @@
 [build]
-  command = "npm run build"    # Comando para construir o projeto
+  command = "npm install tailwindcss && npm run build"  # Instala o Tailwind CSS e executa o build
   publish = ".next"
-  node_version = "18.17.1"     # Define uma versão válida do Node.js
+  node_version = "18.17.1"
 
 [build.environment]
-  NODE_ENV = "production"      # Define o ambiente como produção
+  NODE_ENV = "production"
