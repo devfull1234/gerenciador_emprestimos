@@ -1,0 +1,126 @@
+/* styles.css */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* styles/sidebar.css */
+@keyframes slideIn {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+.sidebar-container {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(16, 185, 129, 0.5) transparent;
+}
+
+.sidebar-container::-webkit-scrollbar {
+  width: 6px;
+}
+
+.sidebar-container::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.sidebar-container::-webkit-scrollbar-thumb {
+  background-color: rgba(16, 185, 129, 0.5);
+  border-radius: 3px;
+}
+
+.menu-item-hover {
+  position: relative;
+  overflow: hidden;
+}
+
+.menu-item-hover::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 0;
+  height: 2px;
+  background-color: #10B981;
+  transition: width 0.3s ease;
+}
+
+.menu-item-hover:hover::after {
+  width: 100%;
+}
+
+.avatar.placeholder > div {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #10B981 0%, #059669 100%);
+  box-shadow: 0 4px 6px -1px rgba(16, 185, 129, 0.1),
+              0 2px 4px -1px rgba(16, 185, 129, 0.06);
+}
+
+.active-menu-item {
+  background: linear-gradient(to right, rgba(16, 185, 129, 0.1), transparent);
+  border-right: 3px solid #10B981;
+}
+
+@media (max-width: 1024px) {
+  .sidebar-mobile {
+    animation: slideIn 0.3s ease-out;
+  }
+}
+
+/* Dark mode styles */
+@media (prefers-color-scheme: dark) {
+  .sidebar-container {
+    scrollbar-color: rgba(16, 185, 129, 0.3) rgba(17, 24, 39, 0.8);
+  }
+
+  .active-menu-item {
+    background: linear-gradient(to right, rgba(16, 185, 129, 0.2), transparent);
+  }
+}
+
+/* Animation classes */
+.fade-in {
+  animation: fadeIn 0.3s ease-in-out;
+}
+
+.slide-in {
+  animation: slideIn 0.3s ease-out;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* Transition classes */
+.menu-transition {
+  transition: all 0.3s ease-in-out;
+}
+
+.hover-scale {
+  transition: transform 0.2s ease;
+}
+
+.hover-scale:hover {
+  transform: scale(1.02);
+}
+
+/* Custom shadows */
+.sidebar-shadow {
+  box-shadow: 4px 0 15px rgba(0, 0, 0, 0.05);
+}
+
+/* Responsive adjustments */
+@media (max-width: 640px) {
+  .sidebar-mobile-padding {
+    padding-top: 4rem;
+  }
+}

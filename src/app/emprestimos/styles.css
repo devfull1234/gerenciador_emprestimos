@@ -1,0 +1,22 @@
+/* styles.css */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Variáveis CSS personalizadas */
+:root {
+  --primary-green: #10B981;
+  --hover-green: #059669;
+  --light-green: #D1FAE5;
+  --error-red: #EF4444;
+  --success-green: #34D399;
+}
+
+.parcela-paga {
+    background-color: #D4F4DD; /* verde claro */
+    color: #287233; /* verde escuro */
+}
+.parcela-pendente {
+    background-color: #ffffff; /* amarelo claro */
+    color: #9C6B0C; /* amarelo escuro */
+}
