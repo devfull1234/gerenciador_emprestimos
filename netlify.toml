@@ -4,4 +4,4 @@
   node_version = "18.17.1"
 
 [build.environment]
-  NODE_ENV = "production"
+  NODE_ENV = "development"
