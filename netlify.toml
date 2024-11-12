@@ -1,6 +1,6 @@
 [build]
   command = "npm run build"    # Comando para construir o projeto
-  publish = "public"           # Diretório onde o build final será publicado (ajuste conforme necessário)
+  publish = ".next"
   node_version = "18.17.1"     # Define uma versão válida do Node.js
 
 [build.environment]
