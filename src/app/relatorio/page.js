@@ -45,7 +45,7 @@ const RelatorioClientes = () => {
       try {
         // Carregar os dados aqui
         const response = await getData();
-        setState(response);  // Atualização de estado somente após a montagem
+        setStats(response);  // Atualização de estado somente após a montagem
       } catch (error) {
         console.error("Erro ao carregar dados:", error);
       }
@@ -123,71 +123,175 @@ const RelatorioClientes = () => {
   };
 
   const handleExportPDF = (clienteId = null) => {
-    const doc = new jsPDF('l', 'mm', 'a4'); // 'l' para paisagem, 'mm' para unidades em milímetros, 'a4' para o tamanho da página
+    // Configurações iniciais do documento
+    const doc = new jsPDF('l', 'mm', 'a4');
     
+    // Configurações de estilo
+    const styles = {
+      title: {
+        fontSize: 20,
+        fontStyle: 'bold'
+      },
+      subtitle: {
+        fontSize: 16,
+        fontStyle: 'bold'
+      },
+      header: {
+        fontSize: 12,
+        fontStyle: 'bold'
+      },
+      normal: {
+        fontSize: 10
+      },
+      spacing: {
+        line: 8,
+        section: 15
+      }
+    };
+  
+    // Função auxiliar para formatar valores monetários
+    const formatMoney = (value) => {
+      return new Intl.NumberFormat('pt-BR', {
+        style: 'currency',
+        currency: 'BRL'
+      }).format(value);
+    };
+  
+    // Função auxiliar para formatar datas
+    const formatDate = (date) => {
+      return new Date(date).toLocaleDateString('pt-BR');
+    };
+  
+    // Função para adicionar texto com estilo
+    const addStyledText = (text, x, y, style) => {
+      doc.setFontSize(style.fontSize);
+      if (style.fontStyle === 'bold') {
+        doc.setFont('helvetica', 'bold');
+      } else {
+        doc.setFont('helvetica', 'normal');
+      }
+      doc.text(text, x, y);
+    };
+  
+    // Função para adicionar linha horizontal
+    const addHorizontalLine = (y) => {
+      doc.setLineWidth(0.5);
+      doc.line(20, y, doc.internal.pageSize.width - 20, y);
+    };
+  
     if (clienteId) {
-      // Exportação de dados de um cliente específico
+      // Relatório Individual do Cliente
       const cliente = clientes.find(c => c.id === clienteId);
       const clienteEmprestimos = emprestimos.filter(e => e.cliente === clienteId);
   
-      doc.text(`Relatório do Cliente: ${cliente.nome}`, 20, 20);
-      doc.text(`CPF: ${cliente.cpf}`, 20, 30);
-      doc.text(`Email: ${cliente.email}`, 20, 40);
-      doc.text(`Telefone: ${cliente.contato}`, 20, 50);
+      // Cabeçalho
+      addStyledText('Relatório Individual do Cliente', 20, 20, styles.title);
+      addHorizontalLine(25);
   
-      const emprestimosData = clienteEmprestimos.map(emp => [
-        emp.id,
-        emp.valor,
-        emp.taxa_juros,
-        emp.parcelas.length,
-        emp.parcelas.filter(p => p.status === 'Paga').length, // Parcelas pagas
-        emp.parcelas.length ? emp.parcelas[0].data_vencimento : null, // Vencimento da primeira parcela
-        emp.parcelas.length ? emp.parcelas[emp.parcelas.length - 1].data_vencimento : null, // Data de término
-        emp.data_criacao
-      ]);
+      // Informações do Cliente
+      let yPos = 40;
+      addStyledText('Dados do Cliente', 20, yPos, styles.subtitle);
+      yPos += styles.spacing.line;
+      addStyledText(`Nome: ${cliente.nome}`, 20, yPos, styles.normal);
+      addStyledText(`CPF: ${cliente.cpf}`, 120, yPos, styles.normal);
+      yPos += styles.spacing.line;
+      addStyledText(`Email: ${cliente.email}`, 20, yPos, styles.normal);
+      addStyledText(`Telefone: ${cliente.contato}`, 120, yPos, styles.normal);
   
-      doc.autoTable({
-        head: [['ID', 'Valor', 'Taxa Juros', 'Total Parcelas', 'Parcelas Pagas', 'Vencimento Primeira Parcela', 'Data Término', 'Data Criação']],
-        body: emprestimosData,
-        startY: 60
+      // Empréstimos do Cliente
+      yPos += styles.spacing.section;
+      addStyledText('Empréstimos', 20, yPos, styles.subtitle);
+      addHorizontalLine(yPos + 2);
+  
+      clienteEmprestimos.forEach((emp, index) => {
+        yPos += styles.spacing.section;
+        
+        // Verifica se precisa de nova página
+        if (yPos > doc.internal.pageSize.height - 40) {
+          doc.addPage();
+          yPos = 20;
+        }
+  
+        addStyledText(`Empréstimo #${emp.id}`, 20, yPos, styles.header);
+        yPos += styles.spacing.line;
+        
+        const parcelasPagas = emp.parcelas.filter(p => p.status === 'Paga').length;
+        
+        addStyledText(`Valor: ${formatMoney(emp.valor)}`, 20, yPos, styles.normal);
+        addStyledText(`Taxa de Juros: ${emp.taxa_juros}%`, 100, yPos, styles.normal);
+        yPos += styles.spacing.line;
+        
+        addStyledText(`Parcelas: ${parcelasPagas}/${emp.parcelas.length}`, 20, yPos, styles.normal);
+        addStyledText(`Criado em: ${formatDate(emp.data_criacao)}`, 100, yPos, styles.normal);
+        yPos += styles.spacing.line;
+        
+        if (emp.parcelas.length) {
+          addStyledText(`Primeira Parcela: ${formatDate(emp.parcelas[0].data_vencimento)}`, 20, yPos, styles.normal);
+          addStyledText(`Última Parcela: ${formatDate(emp.parcelas[emp.parcelas.length - 1].data_vencimento)}`, 100, yPos, styles.normal);
+        }
       });
   
     } else {
-      // Exportação de dados gerais de todos os clientes e empréstimos
-      doc.text('Relatório Geral de Clientes e Empréstimos', 20, 20);
-  
+      // Relatório Geral
+      addStyledText('Relatório Geral de Clientes e Empréstimos', 20, 20, styles.title);
+      
       clientes.forEach((cliente, index) => {
         if (index > 0) {
-          doc.addPage(); // Adiciona uma nova página para cada cliente
+          doc.addPage();
         }
   
-        doc.text(`Cliente: ${cliente.nome} - CPF: ${cliente.cpf}`, 20, 30);
-        doc.text(`Email: ${cliente.email}`, 20, 40);
-        doc.text(`Telefone: ${cliente.contato}`, 20, 50);
-  
+        let yPos = 40;
         const clienteEmprestimos = emprestimos.filter(e => e.cliente === cliente.id);
-        const emprestimosData = clienteEmprestimos.map(emp => [
-          emp.id,
-          emp.valor,
-          emp.taxa_juros,
-          emp.parcelas.length,
-          emp.parcelas.filter(p => p.status === 'Paga').length,
-          emp.parcelas.length ? emp.parcelas[0].data_vencimento : null,
-          emp.parcelas.length ? emp.parcelas[emp.parcelas.length - 1].data_vencimento : null,
-          emp.data_criacao
-        ]);
   
-        doc.autoTable({
-          head: [['ID', 'Valor', 'Taxa Juros', 'Total Parcelas', 'Parcelas Pagas', 'Vencimento Primeira Parcela', 'Data Término', 'Data Criação']],
-          body: emprestimosData,
-          startY: 60
+        // Dados do Cliente
+        addStyledText('Dados do Cliente', 20, yPos, styles.subtitle);
+        yPos += styles.spacing.line;
+        addStyledText(`Nome: ${cliente.nome}`, 20, yPos, styles.normal);
+        addStyledText(`CPF: ${cliente.cpf}`, 120, yPos, styles.normal);
+        yPos += styles.spacing.line;
+        addStyledText(`Email: ${cliente.email}`, 20, yPos, styles.normal);
+        addStyledText(`Telefone: ${cliente.contato}`, 120, yPos, styles.normal);
+  
+        // Resumo dos Empréstimos
+        yPos += styles.spacing.section;
+        addStyledText(`Empréstimos (${clienteEmprestimos.length})`, 20, yPos, styles.subtitle);
+        addHorizontalLine(yPos + 2);
+  
+        clienteEmprestimos.forEach((emp, empIndex) => {
+          yPos += styles.spacing.section;
+  
+          if (yPos > doc.internal.pageSize.height - 40) {
+            doc.addPage();
+            yPos = 20;
+          }
+  
+          const parcelasPagas = emp.parcelas.filter(p => p.status === 'Paga').length;
+  
+          addStyledText(`Empréstimo #${emp.id}`, 20, yPos, styles.header);
+          yPos += styles.spacing.line;
+          
+          addStyledText(`Valor: ${formatMoney(emp.valor)}`, 20, yPos, styles.normal);
+          addStyledText(`Taxa de Juros: ${emp.taxa_juros}%`, 100, yPos, styles.normal);
+          yPos += styles.spacing.line;
+          
+          addStyledText(`Parcelas: ${parcelasPagas}/${emp.parcelas.length}`, 20, yPos, styles.normal);
+          addStyledText(`Criado em: ${formatDate(emp.data_criacao)}`, 100, yPos, styles.normal);
+          
+          if (emp.parcelas.length) {
+            yPos += styles.spacing.line;
+            addStyledText(`Primeira Parcela: ${formatDate(emp.parcelas[0].data_vencimento)}`, 20, yPos, styles.normal);
+            addStyledText(`Última Parcela: ${formatDate(emp.parcelas[emp.parcelas.length - 1].data_vencimento)}`, 100, yPos, styles.normal);
+          }
         });
       });
     }
   
-    doc.save(clienteId ? `relatorio_cliente_${clienteId}.pdf` : 'relatorio_geral.pdf');
+    // Salva o documento
+    const filename = clienteId ? `relatorio_cliente_${clienteId}.pdf` : 'relatorio_geral.pdf';
+    doc.save(filename);
   };
   
+
   
   
 
@@ -453,3 +557,7 @@ const RelatorioClientes = () => {
 };
 
 export default RelatorioClientes;
+function getData() {
+  throw new Error('Function not implemented.');
+}
+

@@ -1,13 +1,23 @@
+
+// components/DebitsPage.tsx
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { AlertTriangle, Search, ChevronUp, ChevronDown, Mail, AlertCircle, CheckCircle, XCircle, ArrowUp, ArrowDown, ChevronRight } from 'lucide-react';
+import { AlertTriangle, Search, ChevronRight, Mail, ArrowUp, ArrowDown } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
-import { collection, query, where, getDocs, getDoc, doc, updateDoc, orderBy, getFirestore } from 'firebase/firestore';
+import { 
+  collection, 
+  query, 
+  getDocs, 
+  getDoc, 
+  doc, 
+  updateDoc, 
+  getFirestore 
+} from 'firebase/firestore';
 import { getAuth, onAuthStateChanged } from 'firebase/auth';
 import './styles.css';
 
-// Configuração do Firebase
+// Firebase configuration
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
   authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
@@ -17,50 +27,110 @@ const firebaseConfig = {
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID
 };
 
-// Inicializa Firebase
+// Initialize Firebase
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 const auth = getAuth(app);
 
-const DebitsPage = () => {
-  const [empresaId, setEmpresaId] = useState(null);
-  const [clients, setClients] = useState([]);
-  const [filteredClients, setFilteredClients] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [sortOrder, setSortOrder] = useState('desc');
-  const [selectedClient, setSelectedClient] = useState(null);
-  const [showModal, setShowModal] = useState(false);
-  const [emailMessage, setEmailMessage] = useState('');
-  const [showEmailModal, setShowEmailModal] = useState(false);
+// types.ts
+export interface Parcela {
+  numero: string;
+  valor: string;
+  data: string;
+  status: 'Paga' | 'Pendente';
+}
 
+export interface Emprestimo {
+  id: string;
+  cliente: string;
+  valorComJuros: string;
+  parcelas_pagas: string;
+  total_parcelas: string;
+  forma_pagamento: string;
+  data_pagamento: string;
+  data_criacao: string;
+  parcelas: Parcela[];
+}
+
+export interface Cliente {
+  id: string;
+  nome: string;
+  emprestimos: Emprestimo[];
+  nalistanegra?: boolean;
+}
+
+const DebitsPage: React.FC = () => {
+  // State
+  const [empresaId, setEmpresaId] = useState<string | null>(null);
+  const [clients, setClients] = useState<Cliente[]>([]);
+  const [filteredClients, setFilteredClients] = useState<Cliente[]>([]);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [searchTerm, setSearchTerm] = useState<string>('');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
+  const [selectedClient, setSelectedClient] = useState<Cliente | null>(null);
+  const [showModal, setShowModal] = useState<boolean>(false);
+  const [emailMessage, setEmailMessage] = useState<string>('');
+  const [showEmailModal, setShowEmailModal] = useState<boolean>(false);
+
+  // Effects
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       if (user) {
         setEmpresaId(user.uid);
         fetchClients(user.uid);
       } else {
-        console.warn("Usuário não autenticado");
+        console.warn("User not authenticated");
       }
     });
 
     return () => unsubscribe();
   }, []);
 
-  const fetchClients = async (empresaId) => {
+  useEffect(() => {
+    if (searchTerm) {
+      const filtered = clients.filter(client =>
+        client.nome.toLowerCase().includes(searchTerm.toLowerCase())
+      );
+      setFilteredClients(filtered);
+    } else {
+      setFilteredClients(clients);
+    }
+  }, [searchTerm, clients]);
+
+  // Helper functions
+  const parseDateString = (dateStr: string): Date => {
+    const [day, month, year] = dateStr.split('/');
+    return new Date(`${year}-${month}-${day}`);
+  };
+
+  const formatCurrency = (value: string): string => {
+    return `R$ ${value}`;
+  };
+
+  // Data fetching
+  const fetchClients = async (empresaId: string): Promise<void> => {
     try {
       const clientsRef = collection(db, `empresas/${empresaId}/clientes`);
       const emprestimosRef = collection(db, `empresas/${empresaId}/emprestimos`);
       const listanegraRef = collection(db, `empresas/${empresaId}/lista_negra`);
 
-      const clientsSnapshot = await getDocs(clientsRef);
-      const clientsData = {};
+      const [clientsSnapshot, listanegraSnapshot, emprestimosSnapshot] = await Promise.all([
+        getDocs(clientsRef),
+        getDocs(listanegraRef),
+        getDocs(emprestimosRef)
+      ]);
+
+      const clientsData: { [key: string]: Cliente } = {};
+      const listanegraData: { [key: string]: boolean } = {};
+      
       clientsSnapshot.forEach((doc) => {
-        clientsData[doc.id] = { id: doc.id, ...doc.data(), emprestimos: [] };
+        clientsData[doc.id] = { 
+          id: doc.id, 
+          ...doc.data() as Omit<Cliente, 'id' | 'emprestimos'>, 
+          emprestimos: [] 
+        };
       });
 
-      const listanegraSnapshot = await getDocs(listanegraRef);
-      const listanegraData = {};
       listanegraSnapshot.forEach((doc) => {
         const data = doc.data();
         if (data.ativo) {
@@ -68,72 +138,83 @@ const DebitsPage = () => {
         }
       });
 
-      const emprestimosSnapshot = await getDocs(emprestimosRef);
       emprestimosSnapshot.forEach((doc) => {
-        const emprestimo = doc.data();
+        const emprestimo = doc.data() as Omit<Emprestimo, 'id'>;
         if (clientsData[emprestimo.cliente]) {
           clientsData[emprestimo.cliente].emprestimos.push({
             id: doc.id,
-            ...emprestimo,
-            nalistanegra: listanegraData[emprestimo.cliente] || false
+            ...emprestimo
           });
+          clientsData[emprestimo.cliente].nalistanegra = listanegraData[emprestimo.cliente] || false;
         }
       });
 
-      const clientsArray = Object.values(clientsData).filter(client => client.emprestimos.length > 0);
-      setClients(clientsArray);
-      setFilteredClients(clientsArray);
-      setLoading(false);
+      const sortedClients = Object.values(clientsData)
+        .filter(client => client.emprestimos.length > 0)
+        .sort((a, b) => {
+          const dateA = new Date(a.emprestimos[0]?.data_criacao || 0);
+          const dateB = new Date(b.emprestimos[0]?.data_criacao || 0);
+          return sortOrder === 'asc' ? dateA.getTime() - dateB.getTime() : dateB.getTime() - dateA.getTime();
+        });
+
+      setClients(sortedClients);
+      setFilteredClients(sortedClients);
     } catch (error) {
-      console.error('Erro ao carregar dados:', error);
+      console.error('Error loading data:', error);
+    } finally {
       setLoading(false);
     }
   };
 
-  const handleUpdateParcelaStatus = async (emprestimo, parcelaIndex, newStatus) => {
+  // Event handlers
+  const handleUpdateParcelaStatus = async (
+    emprestimo: Emprestimo,
+    parcelaIndex: number,
+    newStatus: 'Paga' | 'Pendente'
+  ): Promise<void> => {
     if (!empresaId || !emprestimo?.id) {
-      console.warn("empresaId ou emprestimoId ausente.");
+      console.warn("Missing empresaId or emprestimoId");
       return;
     }
+    
     try {
       const emprestimosRef = doc(db, `empresas/${empresaId}/emprestimos/${emprestimo.id}`);
       const empresaRef = doc(db, `empresas/${empresaId}`);
-  
-      // Converter o valor da parcela para Number
+
       const parcelaValor = Number(emprestimo.parcelas[parcelaIndex].valor);
       const updatedParcelas = [...emprestimo.parcelas];
       const oldStatus = updatedParcelas[parcelaIndex].status;
-  
-      // Atualizar o status da parcela
+
       updatedParcelas[parcelaIndex] = {
         ...updatedParcelas[parcelaIndex],
         status: newStatus
       };
-  
-      // Obter valor_emprestimo atual e ajustar conforme o novo status
+
       const empresaSnap = await getDoc(empresaRef);
-      let valorEmprestimoAtual = empresaSnap.data().valor_emprestimo || 0;
-  
+      const empresaData = empresaSnap.data();
+      let valorEmprestimoAtual = empresaData?.valor_emprestimo || 0;
+
       if (newStatus === 'Paga' && oldStatus !== 'Paga') {
         valorEmprestimoAtual += parcelaValor;
       } else if (newStatus === 'Pendente' && oldStatus === 'Paga') {
         valorEmprestimoAtual -= parcelaValor;
       }
-  
+
       const parcelasPagas = updatedParcelas.filter(p => p.status === 'Paga').length;
-  
-      // Atualizar os documentos no Firestore
-      await updateDoc(emprestimosRef, {
-        parcelas: updatedParcelas,
-        parcelas_pagas: parcelasPagas.toString()
-      });
-      await updateDoc(empresaRef, {
-        valor_emprestimo: valorEmprestimoAtual
-      });
-  
-      // Atualizar o estado do cliente selecionado
+
+      await Promise.all([
+        updateDoc(emprestimosRef, {
+          parcelas: updatedParcelas,
+          parcelas_pagas: parcelasPagas.toString()
+        }),
+        updateDoc(empresaRef, {
+          valor_emprestimo: valorEmprestimoAtual
+        })
+      ]);
+
+      // Update local state
       const updatedClients = clients.map(client => {
-        if (client.id === selectedClient.id) {
+        if (client.id === selectedClient?.id) {
           const updatedEmprestimos = client.emprestimos.map(emp => {
             if (emp.id === emprestimo.id) {
               return {
@@ -148,28 +229,30 @@ const DebitsPage = () => {
         }
         return client;
       });
-  
+
       setClients(updatedClients);
-      setSelectedClient(updatedClients.find(c => c.id === selectedClient.id));
-  
+      setSelectedClient(updatedClients.find(c => c.id === selectedClient?.id) || null);
     } catch (error) {
-      console.error('Erro ao atualizar parcela:', error);
+      console.error('Error updating installment:', error);
     }
   };
-  
-  const parseDateString = (dateStr) => {
-    const [day, month, year] = dateStr.split('/');
-    return new Date(`${year}-${month}-${day}`);
-  };
 
+  const handleSendEmail = async (): Promise<void> => {
+    // Implement email sending logic here
+    setShowEmailModal(false);
+  };
 
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
-        <span className="loading loading-spinner loading-lg text-success"></span>
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div>
       </div>
     );
   }
+
+  const sendEmail: React.MouseEventHandler<HTMLButtonElement> = (event) => {
+    // Lógica para enviar o email
+};
 
 
   return (

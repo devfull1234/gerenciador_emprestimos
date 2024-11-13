@@ -281,8 +281,6 @@ const Empresa: React.FC = () => {
                                                             {(provided) => (
                                                                 <motion.div
                                                                     ref={provided.innerRef}
-                                                                    {...provided.draggableProps}
-                                                                    {...provided.dragHandleProps}
                                                                     initial={{ opacity: 0, scale: 0.8 }}
                                                                     animate={{ opacity: 1, scale: 1 }}
                                                                     exit={{ opacity: 0, scale: 0.8 }}

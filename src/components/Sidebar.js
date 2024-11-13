@@ -18,12 +18,8 @@ import {
 import './sidebar.css';
 import { useAuth } from '../hooks/useAuth';
 
-interface SidebarProps {
-  userName?: string;
-  userRole?: string;
-}
 
-const Sidebar = ({ userName = "Usuário", userRole = "Admin" }: SidebarProps) => {
+const Sidebar = ({ userName = "Usuário", userRole = "Admin" }) => {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [isMobileOpen, setIsMobileOpen] = useState(false);
   const pathname = usePathname();
