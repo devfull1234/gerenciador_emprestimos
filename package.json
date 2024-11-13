@@ -4,9 +4,10 @@
   "private": true,
   "scripts": {
     "dev": "next dev --turbopack",
-    "build": "next build",
+    "build": "tsc && next build",
     "start": "next start",
     "lint": "next lint"
+
   },
   "dependencies": {
     "@shadcn/ui": "^0.0.4",
@@ -40,3 +41,4 @@
     "typescript": "^5"
   }
 }
+

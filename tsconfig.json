@@ -2,29 +2,38 @@
   "compilerOptions": {
     "target": "ES2017",
     "lib": ["dom", "dom.iterable", "esnext"],
-    "noEmitOnError": false,
-    "allowJs": true,
-    "skipLibCheck": true,
-    "strict": false,
-    "noImplicitAny": false,
+    "noEmitOnError": false,          // Impede que o TypeScript pare a compilação por erros de tipo.
+    "allowJs": true,                 // Permite arquivos JS junto com TS.
+    "skipLibCheck": true,            // Ignora a verificação de tipos nas bibliotecas (útil para dependências externas).
+    "strict": false,                 // Desativa a verificação estrita (pode ser necessário para evitar erros de tipagem rígida).
+    "noImplicitAny": false,          // Permite o uso de 'any' sem gerar erros.
     "forceConsistentCasingInFileNames": true,
-    "noEmit": true,
-    "esModuleInterop": true,
-    "module": "esnext",
-    "moduleResolution": "bundler",
-    "resolveJsonModule": true,
-    "isolatedModules": true,
-    "jsx": "preserve",
-    "incremental": true,
+    "noEmit": false,                 // Permite a emissão dos arquivos JS mesmo que existam erros.
+    "esModuleInterop": true,         // Facilita a importação de módulos CommonJS.
+    "module": "esnext",              // Usa o módulo ES6.
+    "moduleResolution": "bundler",   // Ajuste para compatibilidade com bundlers.
+    "resolveJsonModule": true,       // Permite a importação de arquivos JSON.
+    "isolatedModules": true,         // Permite que cada arquivo seja tratado como um módulo isolado.
+    "jsx": "preserve",               // Configuração para projetos React.
+    "incremental": true,             // Habilita a compilação incremental para melhorar a performance.
     "plugins": [
       {
-        "name": "next"
+        "name": "next"               // Plugin para integração com o Next.js.
       }
     ],
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./src/*"]             // Alias para a pasta src.
     }
   },
-  "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts", "src/app/relatorio/page.js", "src/components/Sidebar.js"],
-  "exclude": ["node_modules"]
+  "include": [
+    "next-env.d.ts",
+    "**/*.ts",
+    "**/*.tsx",
+    ".next/types/**/*.ts",
+    "src/app/relatorio/page.tsx",
+    "src/components/Sidebar.tsx"
+  ],
+  "exclude": [
+    "node_modules"
+  ]
 }
