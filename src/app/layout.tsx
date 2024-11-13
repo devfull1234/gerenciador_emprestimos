@@ -27,7 +27,6 @@ export default function RootLayout({
   const isLoginPage = pathname === "/login";
 
   return (
-    <html lang="en">
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
         <div style={{ display: "flex" }}>
           {/* Renderiza o Sidebar apenas se não estiver na rota de login */}
@@ -37,6 +36,5 @@ export default function RootLayout({
           </main>
         </div>
       </body>
-    </html>
   );
 }
