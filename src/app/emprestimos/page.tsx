@@ -80,6 +80,7 @@ export default function EmprestimosPage() {
         parcelas_pagas: '0',
         valorComJuros: ''
     });
+    const [showErrorModal, setShowErrorModal] = useState(false);
 
     useEffect(() => {
         const unsubscribe = onAuthStateChanged(auth, (user) => {
@@ -231,10 +232,14 @@ export default function EmprestimosPage() {
           });
           setSelectedCliente(null);
         } catch (error) {
-          console.error('Erro ao criar empréstimo:', error);
-        } finally {
-          setLoading(false);
-        }
+            console.error('Erro ao criar empréstimo:', error);
+            if (error.message === 'Valor indisponível para empréstimo') {
+              // Exibir uma mensagem de erro usando o componente Alert do DaisyUI
+              setShowErrorModal(true);
+            }
+          } finally {
+            setLoading(false);
+          }
       };
       
 
@@ -297,21 +302,27 @@ export default function EmprestimosPage() {
                                     whileHover={{ scale: 1.01 }}
                                     className="form-control"
                                 >
-                                    <label className="label">
-                                        <span className="label-text flex items-center gap-2">
-                                            <DollarSign className="w-4 h-4" />
-                                            Valor (Adicione somente números)
-                                        </span>
-                                    </label>
-                                    <div className="relative">
-                                        <input
-                                            type="text"
-                                            className="input input-success w-full"
-                                            value={formData.valor}
-                                            onChange={(e) => setFormData(prev => ({ ...prev, valor: e.target.value }))}
-                                            required
-                                        />
-                                    </div>
+<div className="form-control">
+  <label className="label">
+    <span className="label-text flex items-center gap-2">
+      <DollarSign className="w-4 h-4" />
+      Valor (Adicione somente números)
+    </span>
+  </label>
+  <div className="relative">
+    <input
+      type="text"
+      className="input input-success w-full"
+      value={formData.valor}
+      onChange={(e) => {
+        // Remover todos os caracteres não numéricos, exceto o ponto decimal
+        const formattedValue = e.target.value.replace(/[^0-9.]/g, '');
+        setFormData((prev) => ({ ...prev, valor: formattedValue }));
+      }}
+      required
+    />
+  </div>
+</div>
                                 </motion.div>
 
                                 <motion.div
@@ -498,6 +509,39 @@ export default function EmprestimosPage() {
                     </motion.div>
                 )}
             </AnimatePresence>
+            <AnimatePresence>
+    {showErrorModal && (
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+        onClick={() => setShowErrorModal(false)}
+      >
+        <motion.div
+          initial={{ scale: 0.5, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          exit={{ scale: 0.5, opacity: 0 }}
+          className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-xl max-w-md w-full mx-4"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="text-center">
+            <AlertCircle className="w-16 h-16 text-error mx-auto mb-4" />
+            <h3 className="text-lg font-semibold mb-2">Valor Indisponível</h3>
+            <p className="text-gray-600 dark:text-gray-400 mb-4">
+              O valor disponível para empréstimos é de R$ {valorDisponivel.toLocaleString('pt-BR')}.
+            </p>
+            <button
+              className="btn btn-error text-white"
+              onClick={() => setShowErrorModal(false)}
+            >
+              Entendi
+            </button>
+          </div>
+        </motion.div>
+      </motion.div>
+    )}
+  </AnimatePresence>
         </div>
     );
 }

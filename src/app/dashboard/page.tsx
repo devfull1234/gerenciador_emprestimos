@@ -57,8 +57,10 @@ export default function Dashboard() {
     const [emprestimos, setEmprestimos] = useState<Emprestimo[]>([]);
     const [listaNegra, setListaNegra] = useState<ListaNegra[]>([]);
     const [loading, setLoading] = useState(true);
-
-    useEffect(() => {
+    const [stats, setStats] = useState({
+        parcelasAtrasadas: 0,
+      });
+      useEffect(() => {
         const fetchData = async () => {
             if (!user) return;
 
@@ -90,6 +92,7 @@ export default function Dashboard() {
                 })) as ListaNegra[];
                 setListaNegra(listaNegraData);
 
+                calculateStats(emprestimosData);
             } catch (error) {
                 console.error('Erro ao buscar dados:', error);
             } finally {
@@ -102,12 +105,24 @@ export default function Dashboard() {
         }
     }, [user, authLoading]);
 
+    const calculateStats = (emprestimosList) => {
+        const stats = emprestimosList.reduce((acc, emp) => {
+          const parcelas = emp.parcelas || [];
+          const parcelasAtrasadas = parcelas.filter(p => {
+          const parcelaDate = p.data.split('/').reverse().join('-');
+            return new Date(parcelaDate) < new Date();
+          }).length;      
+          return {
+            parcelasAtrasadas: acc.parcelasAtrasadas + parcelasAtrasadas,
+
+          };
+        }, { parcelasAtrasadas: 0});
+        setStats(stats);
+      };
+
     const totalEmprestado = emprestimos.reduce((acc, emp) => acc + parseFloat(emp.valor.toString().replace(',', '.')), 0);
     const totalClientes = clientes.length;
     const clientesListaNegra = listaNegra.filter(item => item.ativo).length;
-    const parcelasAtrasadas = emprestimos.filter(
-        emp => new Date(emp.data_pagamento) < new Date()
-    ).length;
 
     const dadosGraficoEmprestimos = emprestimos.map(emp => ({
         cliente: clientes.find(c => c.id === emp.cliente)?.nome || 'Cliente não encontrado',
@@ -186,7 +201,7 @@ export default function Dashboard() {
                                     <Calendar className="w-8 h-8" />
                                 </div>
                                 <div className="stat-title">Parcelas Atrasadas</div>
-                                <div className="stat-value text-warning">{parcelasAtrasadas}</div>
+                                <div className="stat-value text-warning">{stats.parcelasAtrasadas}</div>
                             </div>
                         </motion.div>
                     </div>

@@ -25,6 +25,7 @@ import {
     CreditCard
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import './styles.css';
 
 const firebaseConfig = {
     apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,

@@ -1,0 +1,18 @@
+/* styles.css */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Variáveis CSS personalizadas */
+:root {
+  --primary-green: #10B981;
+  --hover-green: #059669;
+  --light-green: #D1FAE5;
+  --error-red: #EF4444;
+  --success-green: #34D399;
+}
+main {
+    margin-left: 250px !important;
+    padding: 20px;
+    width: 90% !important;
+}

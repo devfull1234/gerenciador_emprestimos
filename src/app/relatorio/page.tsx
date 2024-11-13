@@ -10,7 +10,6 @@ import jsPDF from 'jspdf';
 import 'jspdf-autotable';
 import * as XLSX from 'xlsx';
 import './styles.css';
-import { useAuth } from '@/hooks/useAuth';
 
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
@@ -20,6 +19,7 @@ const firebaseConfig = {
   messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID
 };
+
 
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
@@ -40,33 +40,18 @@ const RelatorioClientes = () => {
   });
   const [searchTerm, setSearchTerm] = useState('');
   const [isLoading, setIsLoading] = useState(true);
-  const { authState, login, logout } = useAuth();
-  const { user, loading, error } = authState;
-  
+  const [empresaId, setEmpresaId] = useState(null);
+
   useEffect(() => {
-    const fetchAndSetData = async () => {
+    const fetchDataAsync = async () => {
       try {
-        const statsData = await fetchData(user.uid);
-        if (statsData) {
-          setStats(statsData);  // Atualize stats se houver dados
-        }
-        setIsLoading(false);
+        await fetchData(empresaId);
       } catch (error) {
         console.error("Erro ao carregar dados:", error);
-        setIsLoading(false);
       }
     };
   
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      if (user) {
-        fetchAndSetData();
-      } else {
-        console.warn("Usuário não autenticado");
-        setIsLoading(false);
-      }
-    });
-  
-    return () => unsubscribe();
+    fetchDataAsync();
   }, []);
   
   const fetchData = async (empresaId) => {
@@ -96,16 +81,16 @@ const RelatorioClientes = () => {
       const clientesArray = Object.values(clientesData);
       setClientes(clientesArray);
       setEmprestimos(emprestimosData);
+      calculateStats(emprestimosData);
+      setIsLoading(false);
       
-      // Calcular as estatísticas e retorná-las
+      // Retorne o estado calculado aqui, se necessário
       return calculateStats(emprestimosData);
     } catch (error) {
       console.error('Erro ao carregar dados:', error);
       setIsLoading(false);
-      return null;  // Retorne null em caso de erro
     }
   };
-  
   
 
   useEffect(() => {
@@ -122,13 +107,16 @@ const RelatorioClientes = () => {
   }, []);
 
   const calculateStats = (emprestimosList) => {
-    return emprestimosList.reduce((acc, emp) => {
+    const stats = emprestimosList.reduce((acc, emp) => {
       const parcelas = emp.parcelas || [];
       const pendentes = parcelas.filter(p => p.status === 'Pendente').length;
-      const vencidas = parcelas.filter(p => p.status === 'Vencida').length;
+      const vencidas = parcelas.filter(p => {
+      const parcelaDate = p.data.split('/').reverse().join('-');
+        return new Date(parcelaDate) < new Date();
+      }).length;      
       const pagas = parcelas.filter(p => p.status === 'Paga').length;
       const valorTotal = parcelas.reduce((sum, p) => sum + parseFloat(p.valor || 0), 0);
-  
+
       return {
         emprestimosAtivos: acc.emprestimosAtivos + 1,
         parcelasPendentes: acc.parcelasPendentes + pendentes,
@@ -136,9 +124,10 @@ const RelatorioClientes = () => {
         parcelasPagas: acc.parcelasPagas + pagas,
         valorTotal: acc.valorTotal + valorTotal
       };
-    }, { emprestimosAtivos: 0, parcelasPendentes: 0, parcelasVencidas: 0, parcelasPagas: 0, valorTotal: 0 });
+    }, { emprestimosAtivos: 0, parcelasPendentes: 0, parcelasVencidas: 0,parcelasPagas: 0, valorTotal: 0 });
+
+    setStats(stats);
   };
-  
 
   const handleExportPDF = (clienteId = null) => {
     // Configurações iniciais do documento

@@ -53,7 +53,6 @@ const Sidebar = ({ userName = "Usuário", userRole = "Admin" }) => {
       title: 'Painel de Empréstimos',
       icon: <FiDollarSign className="w-5 h-5" />,
       path: '/emprestimos',
-      unavailable: true,
     },
     {
       title: 'Débito',

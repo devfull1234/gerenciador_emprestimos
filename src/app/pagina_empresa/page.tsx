@@ -9,6 +9,7 @@ import { getFirestore } from 'firebase/firestore';
 import { Building2, Target, Banknote, Save, Plus, Edit2, Trash2, Bookmark } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { DragDropContext, Droppable, Draggable } from 'react-beautiful-dnd';
+import './styles.css';
 
 interface Lembrete {
     id: string;
