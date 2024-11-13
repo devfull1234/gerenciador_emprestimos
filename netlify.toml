@@ -1,5 +1,5 @@
 [build]
-  command = "npm install tailwindcss && npm run build"  # Instala o Tailwind CSS e executa o build
+  command = "npm install tailwindcss && npm run build"
   publish = ".next"
   node_version = "18.17.1"
 

@@ -65,7 +65,6 @@ const Sidebar = ({ userName = "Usuário", userRole = "Admin" }: SidebarProps) =>
       title: 'Inadimplentes',
       icon: <FiActivity className="w-5 h-5" />,
       path: '/lista_negra',
-      unavailable: true,
     }
   ];
 
