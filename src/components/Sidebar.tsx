@@ -32,7 +32,7 @@ const Sidebar = ({ userName = "Usuário", userRole = "Admin" }) => {
   const pathname = usePathname();
   const { logout } = useAuth();
   const router = useRouter();
-
+  
   const menuItems: MenuItem[] = [
     { 
       title: 'Empresa',

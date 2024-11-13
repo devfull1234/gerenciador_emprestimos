@@ -507,6 +507,7 @@ const RelatorioClientes = () => {
         </div>
       </div>
 
+
       <div className="bg-slate-800 p-4 rounded-lg shadow mb-6">
         <div className="flex justify-between items-center mb-4">
           <h3 className="text-lg font-semibold">Lista de Clientes</h3>
@@ -532,11 +533,11 @@ const RelatorioClientes = () => {
             <tbody className="bg-slate-800 divide-y divide-gray-200">
               {filteredClientes.map((cliente) => (
                 <tr key={cliente.clienteID}>
-                  <td className="px-6 py-4 whitespace-nowrap">{cliente.nome}</td>
-                  <td className="px-6 py-4 whitespace-nowrap">{cliente.cpf}</td>
-                  <td className="px-6 py-4 whitespace-nowrap">{cliente.email}</td>
-                  <td className="px-6 py-4 whitespace-nowrap">{cliente.contato}</td>
-                  <td className="px-6 py-4 whitespace-nowrap">
+                  <td className="px-6 py-4 text-white  whitespace-nowrap">{cliente.nome}</td>
+                  <td className="px-6 py-4 text-white whitespace-nowrap">{cliente.cpf}</td>
+                  <td className="px-6 py-4 text-white whitespace-nowrap">{cliente.email}</td>
+                  <td className="px-6 py-4 text-white whitespace-nowrap">{cliente.contato}</td>
+                  <td className="px-6 py-4 text-white whitespace-nowrap">
                   <div className="flex gap-4">
   <button 
     onClick={() => handleExportPDF(cliente.id)}
