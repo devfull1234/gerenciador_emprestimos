@@ -18,6 +18,13 @@ import {
 import './sidebar.css';
 import { useAuth } from '../hooks/useAuth';
 
+type MenuItem = {
+  title: string;
+  icon: React.ReactNode;
+  path: string;
+  unavailable?: boolean;
+};
+
 
 const Sidebar = ({ userName = "Usuário", userRole = "Admin" }) => {
   const [isCollapsed, setIsCollapsed] = useState(false);
@@ -26,7 +33,7 @@ const Sidebar = ({ userName = "Usuário", userRole = "Admin" }) => {
   const { logout } = useAuth();
   const router = useRouter();
 
-  const menuItems = [
+  const menuItems: MenuItem[] = [
     { 
       title: 'Empresa',
       icon: <FiBriefcase className="w-5 h-5" />,
@@ -46,6 +53,7 @@ const Sidebar = ({ userName = "Usuário", userRole = "Admin" }) => {
       title: 'Painel de Empréstimos',
       icon: <FiDollarSign className="w-5 h-5" />,
       path: '/emprestimos',
+      unavailable: true,
     },
     {
       title: 'Débito',
@@ -63,6 +71,7 @@ const Sidebar = ({ userName = "Usuário", userRole = "Admin" }) => {
       path: '/lista_negra',
     }
   ];
+  
 
   const sidebarVariants = {
     expanded: { width: '280px' },
