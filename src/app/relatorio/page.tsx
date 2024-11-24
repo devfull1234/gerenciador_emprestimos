@@ -41,7 +41,17 @@ const RelatorioClientes = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [empresaId, setEmpresaId] = useState(null);
-
+  const [theme, setTheme] = useState(
+    window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
+  );
+  
+  useEffect(() => {
+    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+    const handleChange = (e) => setTheme(e.matches ? 'dark' : 'light');
+    mediaQuery.addEventListener('change', handleChange);
+    return () => mediaQuery.removeEventListener('change', handleChange);
+  }, []);
+  
   useEffect(() => {
     const fetchDataAsync = async () => {
       try {
@@ -153,7 +163,11 @@ const RelatorioClientes = () => {
       spacing: {
         line: 8,
         section: 15
-      }
+      },
+      highlight: { 
+        fontSize: 12, 
+        fontStyle: 'bold' 
+      },
     };
   
     // Função auxiliar para formatar valores monetários
@@ -164,11 +178,15 @@ const RelatorioClientes = () => {
       }).format(value);
     };
   
-    // Função auxiliar para formatar datas
     const formatDate = (date) => {
+      // Divide a data no formato DD/MM/YYYY
+      const [day, month, year] = date.split('/');
+      // Retorna a data no formato esperado pelo JavaScript (ISO)
+      return new Date(`${year}-${month}-${day}`).toLocaleDateString('pt-BR');
+    };
+    const formatDatecriacao = (date) => {
       return new Date(date).toLocaleDateString('pt-BR');
     };
-  
     // Função para adicionar texto com estilo
     const addStyledText = (text, x, y, style) => {
       doc.setFontSize(style.fontSize);
@@ -204,7 +222,9 @@ const RelatorioClientes = () => {
       yPos += styles.spacing.line;
       addStyledText(`Email: ${cliente.email}`, 20, yPos, styles.normal);
       addStyledText(`Telefone: ${cliente.contato}`, 120, yPos, styles.normal);
-  
+      yPos += styles.spacing.line;
+      addStyledText(`Local de Trabalho: ${cliente.local_de_trabalho}`, 20, yPos, styles.highlight); // Campo destacado
+
       // Empréstimos do Cliente
       yPos += styles.spacing.section;
       addStyledText('Empréstimos', 20, yPos, styles.subtitle);
@@ -229,13 +249,17 @@ const RelatorioClientes = () => {
         yPos += styles.spacing.line;
         
         addStyledText(`Parcelas: ${parcelasPagas}/${emp.parcelas.length}`, 20, yPos, styles.normal);
-        addStyledText(`Criado em: ${formatDate(emp.data_criacao)}`, 100, yPos, styles.normal);
+        addStyledText(`Criado em: ${formatDatecriacao(emp.data_criacao)}`, 100, yPos, styles.normal);
         yPos += styles.spacing.line;
         
         if (emp.parcelas.length) {
-          addStyledText(`Primeira Parcela: ${formatDate(emp.parcelas[0].data_vencimento)}`, 20, yPos, styles.normal);
-          addStyledText(`Última Parcela: ${formatDate(emp.parcelas[emp.parcelas.length - 1].data_vencimento)}`, 100, yPos, styles.normal);
+          
+          yPos += styles.spacing.line;
+          addStyledText(`Primeira Parcela: ${formatDate(emp.parcelas[0].data)}`, 20, yPos, styles.normal);
+          addStyledText(`Última Parcela: ${formatDate(emp.parcelas[emp.parcelas.length - 1].data)}`, 100, yPos, styles.normal);
         }
+        
+        
       });
   
     } else {
@@ -258,7 +282,9 @@ const RelatorioClientes = () => {
         yPos += styles.spacing.line;
         addStyledText(`Email: ${cliente.email}`, 20, yPos, styles.normal);
         addStyledText(`Telefone: ${cliente.contato}`, 120, yPos, styles.normal);
-  
+        yPos += styles.spacing.line;
+        addStyledText(`Local de Trabalho: ${cliente.local_de_trabalho}`, 20, yPos, styles.highlight); // Campo destacado
+    
         // Resumo dos Empréstimos
         yPos += styles.spacing.section;
         addStyledText(`Empréstimos (${clienteEmprestimos.length})`, 20, yPos, styles.subtitle);
@@ -282,12 +308,13 @@ const RelatorioClientes = () => {
           yPos += styles.spacing.line;
           
           addStyledText(`Parcelas: ${parcelasPagas}/${emp.parcelas.length}`, 20, yPos, styles.normal);
-          addStyledText(`Criado em: ${formatDate(emp.data_criacao)}`, 100, yPos, styles.normal);
+          addStyledText(`Criado em: ${formatDatecriacao(emp.data_criacao)}`, 100, yPos, styles.normal);
           
           if (emp.parcelas.length) {
+            
             yPos += styles.spacing.line;
-            addStyledText(`Primeira Parcela: ${formatDate(emp.parcelas[0].data_vencimento)}`, 20, yPos, styles.normal);
-            addStyledText(`Última Parcela: ${formatDate(emp.parcelas[emp.parcelas.length - 1].data_vencimento)}`, 100, yPos, styles.normal);
+            addStyledText(`Primeira Parcela: ${formatDate(emp.parcelas[0].data)}`, 20, yPos, styles.normal);
+            addStyledText(`Última Parcela: ${formatDate(emp.parcelas[emp.parcelas.length - 1].data)}`, 100, yPos, styles.normal);
           }
         });
       });
@@ -456,110 +483,168 @@ const RelatorioClientes = () => {
           { title: 'Parcelas Vencidas', value: stats.parcelasVencidas, icon: <AlertTriangle className="w-4 h-4" />, color: 'text-red-500' },
           { title: 'Valor Total', value: `R$ ${stats.valorTotal.toFixed(2)}`, icon: <TrendingUp className="w-4 h-4" />, color: 'text-green-500' }
         ].map((stat, i) => (
-          <div key={i} className="bg-slate-800 p-4 rounded-lg shadow">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-500">{stat.title}</p>
-                <p className={`text-xl font-semibold ${stat.color}`}>{stat.value}</p>
-              </div>
-              <div className={stat.color}>{stat.icon}</div>
-            </div>
-          </div>
+<div
+  key={i}
+  className={`p-4 rounded-lg shadow ${
+    theme === 'dark' ? 'bg-slate-800 text-white' : 'bg-white text-black'
+  }`}
+>
+  <div className="flex items-center justify-between">
+    <div>
+      <p className="text-sm text-gray-500">{stat.title}</p>
+      <p className={`text-xl font-semibold ${stat.color}`}>{stat.value}</p>
+    </div>
+    <div className={stat.color}>{stat.icon}</div>
+  </div>
+</div>
+
         ))}
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-        <div className="bg-slate-800 p-4 rounded-lg shadow">
-          <h3 className="text-lg font-semibold mb-4">Distribuição de Parcelas</h3>
-          <ResponsiveContainer width="100%" height={300}>
-            <PieChart>
-              <Pie
-                data={getPieData()}
-                dataKey="value"
-                nameKey="name"
-                cx="50%"
-                cy="50%"
-                innerRadius={60}
-                outerRadius={80}
-                label
-              >
-                {getPieData().map((_, index) => (
-                  <Cell key={`cell-${index}`} fill={COLORS[index]} />
-                ))}
-              </Pie>
-              <Tooltip />
-              <Legend />
-            </PieChart>
-          </ResponsiveContainer>
-        </div>
-        <div className="bg-slate-800 p-4 rounded-lg shadow">
-          <h3 className="text-lg font-semibold mb-4">Taxa de Inadimplência</h3>
-          <ResponsiveContainer width="100%" height={300}>
-            <LineChart data={getDefaultLineData()}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="month" />
-              <YAxis />
-              <Tooltip />
-              <Legend />
-              <Line type="monotone" dataKey="taxa" name="Taxa de Inadimplência %" stroke="#8884d8" />
-            </LineChart>
-          </ResponsiveContainer>
-        </div>
-      </div>
-
-
-      <div className="bg-slate-800 p-4 rounded-lg shadow mb-6">
-        <div className="flex justify-between items-center mb-4">
-          <h3 className="text-lg font-semibold">Lista de Clientes</h3>
-          <input
-            type="text"
-            placeholder="Buscar cliente..."
-            className="px-4 py-2 border rounded-lg"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-          />
-        </div>
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-slate-800">
-              <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Nome</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">CPF</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Email</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Contato</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Ações</th>
-              </tr>
-            </thead>
-            <tbody className="bg-slate-800 divide-y divide-gray-200">
-              {filteredClientes.map((cliente) => (
-                <tr key={cliente.clienteID}>
-                  <td className="px-6 py-4 text-white  whitespace-nowrap">{cliente.nome}</td>
-                  <td className="px-6 py-4 text-white whitespace-nowrap">{cliente.cpf}</td>
-                  <td className="px-6 py-4 text-white whitespace-nowrap">{cliente.email}</td>
-                  <td className="px-6 py-4 text-white whitespace-nowrap">{cliente.contato}</td>
-                  <td className="px-6 py-4 text-white whitespace-nowrap">
-                  <div className="flex gap-4">
-  <button 
-    onClick={() => handleExportPDF(cliente.id)}
-    className="px-3 py-2 bg-red-500 text-white rounded-lg flex items-center gap-2 hover:bg-red-600 transition-colors text-sm"
+  <div
+    className={`p-4 rounded-lg shadow ${
+      theme === 'dark' ? 'bg-slate-800 text-white' : 'bg-white text-black'
+    }`}
   >
-    Exportar PDF
-  </button>
-  <button 
-    onClick={() => handleExportExcel(cliente.id)}
-    className="px-3 py-2 bg-green-500 text-white rounded-lg flex items-center gap-2 hover:bg-green-600 transition-colors text-sm"
+    <h3 className="text-lg font-semibold mb-4">Distribuição de Parcelas</h3>
+    <ResponsiveContainer width="100%" height={300}>
+      <PieChart>
+        <Pie
+          data={getPieData()}
+          dataKey="value"
+          nameKey="name"
+          cx="50%"
+          cy="50%"
+          innerRadius={60}
+          outerRadius={80}
+          label
+        >
+          {getPieData().map((_, index) => (
+            <Cell key={`cell-${index}`} fill={COLORS[index]} />
+          ))}
+        </Pie>
+        <Tooltip />
+        <Legend />
+      </PieChart>
+    </ResponsiveContainer>
+  </div>
+  <div
+    className={`p-4 rounded-lg shadow ${
+      theme === 'dark' ? 'bg-slate-800 text-white' : 'bg-white text-black'
+    }`}
   >
-    Exportar Excel
-  </button>
+    <h3 className="text-lg font-semibold mb-4">Taxa de Inadimplência</h3>
+    <ResponsiveContainer width="100%" height={300}>
+      <LineChart data={getDefaultLineData()}>
+        <CartesianGrid strokeDasharray="3 3" />
+        <XAxis dataKey="month" />
+        <YAxis />
+        <Tooltip />
+        <Legend />
+        <Line
+          type="monotone"
+          dataKey="taxa"
+          name="Taxa de Inadimplência %"
+          stroke="#8884d8"
+        />
+      </LineChart>
+    </ResponsiveContainer>
+  </div>
 </div>
 
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
+
+
+<div
+  className={`p-4 rounded-lg shadow mb-6 ${
+    theme === 'dark' ? 'bg-slate-800 text-white' : 'bg-white text-black'
+  }`}
+>
+  <div className="flex justify-between items-center mb-4">
+    <h3 className="text-lg font-semibold">Lista de Clientes</h3>
+    <input
+      type="text"
+      placeholder="Buscar cliente..."
+      className={`px-4 py-2 border rounded-lg ${
+        theme === 'dark' ? 'bg-slate-800 text-white' : 'bg-white text-black'
+      }`}
+      value={searchTerm}
+      onChange={(e) => setSearchTerm(e.target.value)}
+    />
+  </div>
+  <div className="overflow-x-auto">
+    <table className="min-w-full divide-y divide-gray-200">
+      <thead className={theme === 'dark' ? 'bg-slate-800' : 'bg-gray-100'}>
+        <tr>
+          <th
+            className={`px-6 py-3 text-left text-xs font-medium uppercase tracking-wider ${
+              theme === 'dark' ? 'text-gray-500' : 'text-gray-700'
+            }`}
+          >
+            Nome
+          </th>
+          <th
+            className={`px-6 py-3 text-left text-xs font-medium uppercase tracking-wider ${
+              theme === 'dark' ? 'text-gray-500' : 'text-gray-700'
+            }`}
+          >
+            CPF
+          </th>
+          <th
+            className={`px-6 py-3 text-left text-xs font-medium uppercase tracking-wider ${
+              theme === 'dark' ? 'text-gray-500' : 'text-gray-700'
+            }`}
+          >
+            Email
+          </th>
+          <th
+            className={`px-6 py-3 text-left text-xs font-medium uppercase tracking-wider ${
+              theme === 'dark' ? 'text-gray-500' : 'text-gray-700'
+            }`}
+          >
+            Contato
+          </th>
+          <th
+            className={`px-6 py-3 text-left text-xs font-medium uppercase tracking-wider ${
+              theme === 'dark' ? 'text-gray-500' : 'text-gray-700'
+            }`}
+          >
+            Ações
+          </th>
+        </tr>
+      </thead>
+      <tbody
+        className={theme === 'dark' ? 'bg-slate-800 divide-y divide-gray-700' : 'bg-white divide-y divide-gray-200'}
+      >
+        {filteredClientes.map((cliente) => (
+          <tr key={cliente.clienteID}>
+            <td className="px-6 py-4 whitespace-nowrap">{cliente.nome}</td>
+            <td className="px-6 py-4 whitespace-nowrap">{cliente.cpf}</td>
+            <td className="px-6 py-4 whitespace-nowrap">{cliente.email}</td>
+            <td className="px-6 py-4 whitespace-nowrap">{cliente.contato}</td>
+            <td className="px-6 py-4 whitespace-nowrap">
+              <div className="flex gap-4">
+                <button
+                  onClick={() => handleExportPDF(cliente.id)}
+                  className="px-3 py-2 bg-red-500 text-white rounded-lg flex items-center gap-2 hover:bg-red-600 transition-colors text-sm"
+                >
+                  Exportar PDF
+                </button>
+                <button
+                  onClick={() => handleExportExcel(cliente.id)}
+                  className="px-3 py-2 bg-green-500 text-white rounded-lg flex items-center gap-2 hover:bg-green-600 transition-colors text-sm"
+                >
+                  Exportar Excel
+                </button>
+              </div>
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  </div>
+</div>
+
     </div>
   );
 };
@@ -568,4 +653,3 @@ export default RelatorioClientes;
 function getData() {
   throw new Error('Function not implemented.');
 }
-

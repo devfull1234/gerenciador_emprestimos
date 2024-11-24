@@ -8,7 +8,8 @@ import {
   collection, 
   addDoc, 
   doc,
-  setDoc
+  setDoc,
+  getDocs
 } from 'firebase/firestore';
 import { getAuth, onAuthStateChanged } from 'firebase/auth';
 import { AlertCircle, UserPlus, Building2, MapPin, Briefcase, Users, FileText } from 'lucide-react';
@@ -43,7 +44,15 @@ export default function CadastroPage() {
     contato: '' 
   });
   const [userId, setUserId] = useState<string | null>(null);
-
+  const [locaisDeTrabalho, setLocaisDeTrabalho] = useState<string[]>([]);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [novoLocal, setNovoLocal] = useState('');
+  const abrirModal = () => setIsModalOpen(true);
+  const fecharModal = () => {
+    setIsModalOpen(false);
+    setNovoLocal('');
+  };
+    
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       if (user) {
@@ -55,6 +64,32 @@ export default function CadastroPage() {
 
     return () => unsubscribe();
   }, []);
+
+  useEffect(() => {
+    const fetchLocaisDeTrabalho = async () => {
+      if (!userId) return;
+  
+      const locaisRef = collection(db, `empresas/${userId}/locaisdetrabalho`);
+      const locaisSnapshot = await getDocs(locaisRef);
+  
+      const locais = locaisSnapshot.docs.map(doc => doc.data().nome as string);
+      setLocaisDeTrabalho(locais);
+    };
+  
+    fetchLocaisDeTrabalho();
+  }, [userId]);
+
+  const salvarNovoLocal = async () => {
+    if (!userId || !novoLocal.trim()) return;
+  
+    const locaisRef = collection(db, `empresas/${userId}/locaisdetrabalho`);
+    await addDoc(locaisRef, { nome: novoLocal });
+  
+    setLocaisDeTrabalho(prev => [...prev, novoLocal]);
+    fecharModal();
+  };
+  
+  
 
   const generateClienteId = () => {
     return `CLI${Date.now()}${Math.random().toString(36).substr(2, 5)}`.toUpperCase();
@@ -97,9 +132,22 @@ export default function CadastroPage() {
     }
   };
 
+  const formatCPF = (value: string) => {
+    return value
+      .replace(/\D/g, '') // Remove caracteres não numéricos
+      .replace(/(\d{3})(\d)/, '$1.$2') // Adiciona o primeiro ponto
+      .replace(/(\d{3})(\d)/, '$1.$2') // Adiciona o segundo ponto
+      .replace(/(\d{3})(\d{1,2})$/, '$1-$2'); // Adiciona o traço
+  };
+
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
+  
+    if (name === 'cpf') {
+      setFormData(prev => ({ ...prev, [name]: formatCPF(value) }));
+    } else {
+      setFormData(prev => ({ ...prev, [name]: value }));
+    }
   };
   
 
@@ -167,7 +215,6 @@ export default function CadastroPage() {
                     value={formData.cpf}
                     onChange={handleInputChange}
                     className="input input-bordered input-success w-full focus:ring-2 focus:ring-green-500"
-                    required
                     pattern="\d{3}\.\d{3}\.\d{3}-\d{2}"
                     placeholder="000.000.000-00"
                   />
@@ -194,24 +241,64 @@ export default function CadastroPage() {
                 </motion.div>
 
                 <motion.div 
-                  whileHover={{ scale: 1.01 }}
-                  className="form-control"
-                >
-                  <label className="label">
-                    <span className="label-text flex items-center gap-2">
-                      <Briefcase className="w-4 h-4" />
-                      Local de Trabalho
-                    </span>
-                  </label>
-                  <input
-                    type="text"
-                    name="local_de_trabalho"
-                    value={formData.local_de_trabalho}
-                    onChange={handleInputChange}
-                    className="input input-bordered input-success w-full focus:ring-2 focus:ring-green-500"
-                    required
-                  />
-                </motion.div>
+  whileHover={{ scale: 1.01 }}
+  className="form-control"
+>
+  <label className="label">
+    <span className="label-text flex items-center gap-2">
+      <Briefcase className="w-4 h-4" />
+      Local de Trabalho
+    </span>
+  </label>
+  <select
+    name="local_de_trabalho"
+    value={formData.local_de_trabalho}
+    onChange={(e) => {
+      if (e.target.value === 'novo') {
+        abrirModal();
+      } else {
+        handleInputChange(e);
+      }
+    }}
+    className="select select-success w-full focus:ring-2 focus:ring-green-500"
+  >
+    <option value="">Selecione um local de trabalho</option>
+    {locaisDeTrabalho.map((local, index) => (
+      <option key={index} value={local}>{local}</option>
+    ))}
+    <option value="novo">+ Adicionar Novo Local</option>
+  </select>
+</motion.div>
+{isModalOpen && (
+  <div className="modal modal-open">
+    <div className="modal-box">
+      <h2 className="font-bold text-lg">Adicionar Novo Local de Trabalho</h2>
+      <input
+        type="text"
+        placeholder="Digite o nome do local"
+        value={novoLocal}
+        onChange={(e) => setNovoLocal(e.target.value)}
+        className="input input-bordered input-success w-full mt-4"
+      />
+      <div className="modal-action">
+        <button 
+          className="btn btn-success" 
+          onClick={salvarNovoLocal}
+        >
+          Salvar
+        </button>
+        <button 
+          className="btn" 
+          onClick={fecharModal}
+        >
+          Cancelar
+        </button>
+      </div>
+    </div>
+  </div>
+)}
+
+
                 <motion.div 
   whileHover={{ scale: 1.01 }}
   className="form-control"
@@ -228,7 +315,6 @@ export default function CadastroPage() {
     value={formData.email}
     onChange={handleInputChange}
     className="input input-bordered input-success w-full focus:ring-2 focus:ring-green-500"
-    required
   />
 </motion.div>
 
@@ -269,9 +355,9 @@ export default function CadastroPage() {
                     className="select select-success w-full focus:ring-2 focus:ring-green-500"
                     required
                   >
-                    <option value="">Selecione um parceiro</option>
-                    <option value="parceiro1">Sim</option>
-                    <option value="parceiro2">Não</option>
+                    <option value="">Parceiro</option>
+                    <option value="sim">Sim</option>
+                    <option value="nao">Não</option>
                   </select>
                 </motion.div>
 
@@ -291,7 +377,6 @@ export default function CadastroPage() {
                     onChange={handleInputChange}
                     className="textarea textarea-success h-24 focus:ring-2 focus:ring-green-500"
                     placeholder="Digite as referências do cliente..."
-                    required
                   />
                 </motion.div>
               </div>

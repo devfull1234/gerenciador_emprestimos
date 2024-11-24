@@ -56,6 +56,7 @@ export interface Cliente {
   id: string;
   nome: string;
   emprestimos: Emprestimo[];
+  local_de_trabalho: string;
   nalistanegra?: boolean;
 }
 
@@ -71,7 +72,10 @@ const DebitsPage: React.FC = () => {
   const [showModal, setShowModal] = useState<boolean>(false);
   const [emailMessage, setEmailMessage] = useState<string>('');
   const [showEmailModal, setShowEmailModal] = useState<boolean>(false);
-
+  const [locaisDeTrabalho, setLocaisDeTrabalho] = useState<string[]>([]);
+  const [showLocalModal, setShowLocalModal] = useState<boolean>(false);
+  const [selectedLocal, setSelectedLocal] = useState<string | null>(null);
+  
   // Effects
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
@@ -85,6 +89,28 @@ const DebitsPage: React.FC = () => {
 
     return () => unsubscribe();
   }, []);
+
+  const fetchLocaisDeTrabalho = async (empresaId: string) => {
+    const locaisRef = collection(db, `empresas/${empresaId}/locaisdetrabalho`);
+    const locaisSnapshot = await getDocs(locaisRef);
+    const locais = locaisSnapshot.docs.map(doc => doc.data().nome as string);
+    setLocaisDeTrabalho(locais);
+  };
+
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      if (user) {
+        setEmpresaId(user.uid);
+        fetchClients(user.uid);
+        fetchLocaisDeTrabalho(user.uid);
+      } else {
+        console.warn("User not authenticated");
+      }
+    });
+  
+    return () => unsubscribe();
+  }, []);
+  
 
   useEffect(() => {
     if (searchTerm) {
@@ -282,43 +308,64 @@ const DebitsPage: React.FC = () => {
             {sortOrder === 'asc' ? <ArrowUp size={20} /> : <ArrowDown size={20} />}
             {sortOrder === 'asc' ? 'Mais antigo' : 'Mais recente'}
           </button>
+          <button
+  className="btn btn-outline btn-info gap-2"
+  onClick={() => setShowLocalModal(true)}
+>
+  Filtrar por Local de Trabalho
+</button>
+
         </div>
       </div>
 
-      {/* Clients List */}
-      <div className="space-y-4">
-        {filteredClients.map((client) => (
+      {showLocalModal && (
+  <div className="modal modal-open" onClick={() => setShowLocalModal(false)}>
+    <div className="modal-box max-w-4xl" onClick={(e) => e.stopPropagation()}>
+      <h3 className="font-bold text-lg mb-4">Selecionar Local de Trabalho</h3>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        {locaisDeTrabalho.map((local, index) => (
           <div
-            key={client.id}
-            className="card bg-base-100 shadow-xl hover:shadow-2xl transition-all duration-300 hover:scale-[1.01] cursor-pointer"
+            key={index}
+            className="card bg-base-100 shadow hover:shadow-lg transition-all duration-300 cursor-pointer p-4"
             onClick={() => {
-              setSelectedClient(client);
-              setShowModal(true);
+              setSelectedLocal(local);
+              setFilteredClients(clients.filter(client => client.local_de_trabalho === local));
+              setShowLocalModal(false);
             }}
           >
-            <div className="card-body">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <h2 className="card-title text-xl">
-                    {client.nome}
-                    {client.nalistanegra && (
-                      <div className="tooltip" data-tip="Cliente na lista negra">
-                        <AlertTriangle className="text-warning ml-2" size={20} />
-                      </div>
-                    )}
-                  </h2>
-                </div>
-                <div className="flex items-center gap-4">
-                  <div className="text-sm opacity-70">
-                    Último empréstimo: {new Date(client.emprestimos[0]?.data_criacao).toLocaleDateString()}
-                  </div>
-                  <ChevronRight size={20} className="opacity-50" />
-                </div>
-              </div>
-            </div>
+            <h3 className="text-lg font-semibold">{local}</h3>
           </div>
         ))}
       </div>
+      <div className="modal-action">
+        <button className="btn" onClick={() => setShowLocalModal(false)}>Fechar</button>
+      </div>
+    </div>
+  </div>
+)}
+
+
+      {/* Clients List */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+  {filteredClients.map((client) => (
+    <div
+      key={client.id}
+      className="card bg-base-100 shadow-xl hover:shadow-2xl transition-all duration-300 cursor-pointer"
+      onClick={() => {
+        setSelectedClient(client);
+        setShowModal(true);
+      }}
+    >
+      <div className="card-body">
+        <h3 className="card-title text-lg font-semibold">{client.nome}</h3>
+        <p className="text-sm text-gray-500">
+          Empréstimos: {client.emprestimos?.length || 0}
+        </p>
+      </div>
+    </div>
+  ))}
+</div>
+
 
       {/* Client Details Modal */}
       {showModal && selectedClient && (

@@ -55,7 +55,7 @@ const Sidebar = ({ userName = "Usuário", userRole = "Admin" }) => {
       path: '/emprestimos',
     },
     {
-      title: 'Débito',
+      title: 'Clientes',
       icon: <FiCreditCard className="w-5 h-5" />,
       path: '/debitos',
     },
