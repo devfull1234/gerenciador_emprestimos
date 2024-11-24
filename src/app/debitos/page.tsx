@@ -61,7 +61,6 @@ export interface Cliente {
 }
 
 const DebitsPage: React.FC = () => {
-  // State
   const [empresaId, setEmpresaId] = useState<string | null>(null);
   const [clients, setClients] = useState<Cliente[]>([]);
   const [filteredClients, setFilteredClients] = useState<Cliente[]>([]);
