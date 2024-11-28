@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -17,6 +17,9 @@ import {
 } from 'react-icons/fi';
 import './sidebar.css';
 import { useAuth } from '../hooks/useAuth';
+import { doc, getDoc } from 'firebase/firestore';
+import { getAuth } from 'firebase/auth';
+import { firestore } from '../lib/firebase'; 
 
 type MenuItem = {
   title: string;
@@ -26,13 +29,54 @@ type MenuItem = {
 };
 
 
-const Sidebar = ({ userName = "Usuário", userRole = "Admin" }) => {
+const Sidebar = ({ userName = "Usuário", userRole = "Administrador" }) => {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [isMobileOpen, setIsMobileOpen] = useState(false);
   const pathname = usePathname();
   const { logout } = useAuth();
   const router = useRouter();
+  const [empresaName, setEmpresaName] = useState("Empresa");
+  const auth = getAuth();
+
+  useEffect(() => {
+    const fetchEmpresaName = async () => {
+      console.log("Iniciando fetchEmpresaName...");
   
+      const user = auth.currentUser;
+      if (!user) {
+        console.warn("Nenhum usuário autenticado encontrado.");
+        return;
+      }
+  
+      try {
+        console.log(`Usuário autenticado encontrado: UID = ${user.uid}`);
+  
+        const docRef = doc(firestore, `empresas/${user.uid}`);
+        console.log(`Documento referenciado: empresas/${user.uid}`);
+  
+        const docSnap = await getDoc(docRef);
+        if (docSnap.exists()) {
+          console.log("Documento encontrado:", docSnap.data());
+  
+          const { nome_empresa } = docSnap.data();
+          console.log(`Nome da empresa extraído: ${nome_empresa}`);
+          
+          setEmpresaName(nome_empresa || "Empresa");
+        } else {
+          console.warn("Documento não encontrado.");
+          setEmpresaName("Empresa");
+        }
+      } catch (error) {
+        console.error("Erro ao buscar nome da empresa:", error);
+        setEmpresaName("Empresa");
+      }
+    };
+  
+    fetchEmpresaName();
+  }, []);
+  
+
+
   const menuItems: MenuItem[] = [
     { 
       title: 'Empresa',
@@ -139,23 +183,23 @@ const Sidebar = ({ userName = "Usuário", userRole = "Admin" }) => {
 
           {/* User Profile */}
           <div className="p-4 border-b border-gray-200 dark:border-gray-700">
-            <div className="flex items-center space-x-4">
-              <div className="avatar placeholder">
-                <div className="bg-green-600 text-white rounded-full w-10">
-                  <span className="text-xl">{userName[0]}</span>
-                </div>
-              </div>
-              {!isCollapsed && (
-                <motion.div
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                >
-                  <div className="font-medium text-gray-700 dark:text-gray-200">{userName}</div>
-                  <div className="text-sm text-gray-500 dark:text-gray-400">{userRole}</div>
-                </motion.div>
-              )}
+        <div className="flex items-center space-x-4">
+          <div className="avatar placeholder">
+            <div className="bg-green-600 text-white rounded-full w-10">
+              <span className="text-xl">{empresaName[0]}</span>
             </div>
           </div>
+          {!isCollapsed && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+            >
+              <div className="font-medium text-gray-700 dark:text-gray-200">{empresaName}</div>
+              <div className="text-sm text-gray-500 dark:text-gray-400">{userRole}</div>
+            </motion.div>
+          )}
+        </div>
+      </div>
 
           {/* Navigation Menu */}
           <nav className="flex-1 overflow-y-auto p-4">

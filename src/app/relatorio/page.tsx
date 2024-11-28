@@ -484,8 +484,13 @@ const RelatorioClientes = () => {
           { title: 'Empréstimos Ativos', value: stats.emprestimosAtivos, icon: <Users className="w-4 h-4" />, color: 'text-blue-500' },
           { title: 'Parcelas Pendentes', value: stats.parcelasPendentes, icon: <AlertCircle className="w-4 h-4" />, color: 'text-yellow-500' },
           { title: 'Parcelas Vencidas', value: stats.parcelasVencidas, icon: <AlertTriangle className="w-4 h-4" />, color: 'text-red-500' },
-          { title: 'Valor Total', value: `R$ ${stats.valorTotal.toFixed(2)}`, icon: <TrendingUp className="w-4 h-4" />, color: 'text-green-500' }
-        ].map((stat, i) => (
+          { 
+            title: 'Valor Total', 
+            value: new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(stats.valorTotal), 
+            icon: <TrendingUp className="w-4 h-4" />, 
+            color: 'text-green-500' 
+          }
+                  ].map((stat, i) => (
 <div
   key={i}
   className={`p-4 rounded-lg shadow ${

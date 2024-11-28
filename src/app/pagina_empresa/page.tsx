@@ -215,20 +215,31 @@ const Empresa: React.FC = () => {
                                 </div>
 
                                 <div className="form-control">
-                                    <label className="label">
-                                        <span className="label-text flex items-center gap-2">
-                                            <Banknote size={18} />
-                                            Valor Empréstimo
-                                        </span>
-                                    </label>
-                                    <input
-                                        type="number"
-                                        placeholder="Valor disponível"
-                                        className="input input-bordered"
-                                        value={empresaData.valor_emprestimo}
-                                        onChange={(e) => setEmpresaData({ ...empresaData, valor_emprestimo: Number(e.target.value) })}
-                                    />
-                                </div>
+    <label className="label">
+        <span className="label-text flex items-center gap-2">
+            <Banknote size={18} />
+            Valor Empréstimo
+        </span>
+    </label>
+    <input
+        type="text"
+        placeholder="Valor disponível"
+        className="input input-bordered"
+        value={
+            new Intl.NumberFormat('pt-BR', {
+                style: 'currency',
+                currency: 'BRL',
+            }).format(empresaData.valor_emprestimo)
+        }
+        onChange={(e) => {
+            const numericValue = Number(
+                e.target.value.replace(/[^\d]/g, "") // Remove caracteres não numéricos
+            ) / 100; // Ajuste para valores em centavos
+            setEmpresaData({ ...empresaData, valor_emprestimo: numericValue });
+        }}
+    />
+</div>
+
 
                                 <button
                                     onClick={handleSave}

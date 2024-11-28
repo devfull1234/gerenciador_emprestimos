@@ -23,16 +23,16 @@ export default function RootLayout({
 }>) {
   const pathname = usePathname();
 
-  // Verifica se estamos na rota de login
-  const isLoginPage = pathname === "/login";
+  // Verifica se estamos na rota de login ou na página raiz
+  const hideSidebar = pathname === "/login" || pathname === "/";
 
   return (
     <html lang="pt-br">
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
         <div style={{ display: "flex" }}>
           {/* Renderiza o Sidebar apenas se não estiver na rota de login */}
-          {!isLoginPage && <Sidebar />}
-          <main style={{ marginLeft: isLoginPage ? "0" : "200px", padding: "20px", width: "100%" }}>
+          {!hideSidebar && <Sidebar />}
+          <main style={{ marginLeft: hideSidebar ? "0" : "200px", padding: "20px", width: "100%" }}>
             {children}
           </main>
         </div>

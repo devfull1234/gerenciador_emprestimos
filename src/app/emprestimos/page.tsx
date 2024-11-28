@@ -26,6 +26,7 @@ import {
     UserCheck,
     CheckCircle2,
     AlertCircle,
+    Building,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import './styles.css';
@@ -48,6 +49,12 @@ interface Cliente {
     nome: string;
     cpf: string;
     nalistaNegra?: boolean;
+    local_de_trabalho?: string;
+}
+
+interface Workplace {
+    id: string;
+    nome: string;
 }
 
 interface EmprestimoForm {
@@ -81,18 +88,48 @@ export default function EmprestimosPage() {
         valorComJuros: ''
     });
     const [showErrorModal, setShowErrorModal] = useState(false);
+    const [workplaces, setWorkplaces] = useState<Workplace[]>([]);
+    const [selectedWorkplace, setSelectedWorkplace] = useState<string>('');
+    const [filteredClientes, setFilteredClientes] = useState<Cliente[]>([]);
 
     useEffect(() => {
         const unsubscribe = onAuthStateChanged(auth, (user) => {
             if (user) {
                 setUserId(user.uid);
                 fetchValorDisponivel(user.uid);
+                fetchWorkplaces(user.uid);
                 fetchClientes(user.uid);
             }
         });
 
         return () => unsubscribe();
     }, []);
+
+    const fetchWorkplaces = async (uid: string) => {
+        try {
+            const workplacesRef = collection(db, `empresas/${uid}/locaisdetrabalho`);
+            const workplacesSnap = await getDocs(workplacesRef);
+            const workplacesData = workplacesSnap.docs.map(doc => ({
+                id: doc.id,
+                nome: doc.data().nome
+            }));
+            setWorkplaces(workplacesData);
+        } catch (error) {
+            console.error('Erro ao buscar locais de trabalho:', error);
+        }
+    };
+
+    useEffect(() => {
+        if (selectedWorkplace) {
+            const filtered = clientes.filter(cliente => {
+                return cliente.local_de_trabalho === selectedWorkplace;
+            });
+                setFilteredClientes(filtered);
+        } else {
+            setFilteredClientes(clientes);
+        }
+    }, [selectedWorkplace, clientes]);
+    
 
     const fetchValorDisponivel = async (uid: string) => {
         try {
@@ -146,17 +183,27 @@ export default function EmprestimosPage() {
     
 
     const calcularJuros = () => {
-        const valor = parseFloat(formData.valor.replace(/[^\d.-]/g, ''));
+        // Remove separadores de milhares e ajusta o formato decimal
+        const valorLimpo = formData.valor.replace(/\./g, '').replace(',', '.').replace(/[^\d.-]/g, '');
+        const valor = parseFloat(valorLimpo);
         const porcentagem = parseFloat(formData.porcentagem);
-
+    
+        console.log("Valor Limpo:", valor); // Log para verificar o valor limpo
+        console.log("Porcentagem:", porcentagem); // Log para verificar a porcentagem
+    
         if (!isNaN(valor) && !isNaN(porcentagem)) {
             const valorComJuros = valor + (valor * (porcentagem / 100));
+            console.log("Valor com Juros Calculado:", valorComJuros); // Log do resultado final
             setFormData(prev => ({
                 ...prev,
                 valorComJuros: valorComJuros.toFixed(2)
             }));
+        } else {
+            console.error("Erro no cálculo dos juros: Valor ou porcentagem inválidos.");
         }
     };
+    
+    
 
     const calcularParcelas = () => {
         const totalParcelas = parseInt(formData.total_parcelas);
@@ -262,34 +309,54 @@ export default function EmprestimosPage() {
                             <span>Valor disponível para empréstimos: R$ {valorDisponivel.toLocaleString('pt-BR')}</span>
                         </div>
 
+
+
                         <form onSubmit={handleSubmit}>
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                <motion.div
-                                    whileHover={{ scale: 1.01 }}
-                                    className="form-control"
-                                >
-                                    <label className="label">
-                                        <span className="label-text flex items-center gap-2">
-                                            <UserCheck className="w-4 h-4" />
-                                            Cliente
-                                        </span>
-                                    </label>
-                                    <select
-                                        className="select select-success w-full"
-                                        onChange={(e) => {
-                                            const cliente = clientes.find(c => c.clienteId === e.target.value);
-                                            setSelectedCliente(cliente || null);
-                                        }}
-                                        value={selectedCliente?.clienteId || ''}
-                                        required
-                                    >
-                                        <option value="">Selecione um cliente</option>
-                                        {clientes.map((cliente) => (
-                                            <option key={cliente.clienteId} value={cliente.clienteId}>
-                                                {cliente.nome} {cliente.nalistaNegra && '⚠️'}
-                                            </option>
-                                        ))}
-                                    </select>
+                            <motion.div whileHover={{ scale: 1.01 }} className="form-control">
+                <label className="label">
+                    <span className="label-text flex items-center gap-2">
+                        <Building className="w-4 h-4" />
+                        Local de Trabalho
+                    </span>
+                </label>
+                <select
+                    className="select select-success w-full"
+                    onChange={(e) => setSelectedWorkplace(e.target.value)}
+                    value={selectedWorkplace}
+                >
+                    <option value="">Todos os locais</option>
+                    {workplaces.map((workplace) => (
+                        <option key={workplace.id} value={workplace.nome}>
+                            {workplace.nome}
+                        </option>
+                    ))}
+                </select>
+            </motion.div>
+
+            <motion.div whileHover={{ scale: 1.01 }} className="form-control">
+                <label className="label">
+                    <span className="label-text flex items-center gap-2">
+                        <UserCheck className="w-4 h-4" />
+                        Cliente
+                    </span>
+                </label>
+                <select
+                    className="select select-success w-full"
+                    onChange={(e) => {
+                        const cliente = filteredClientes.find(c => c.clienteId === e.target.value);
+                        setSelectedCliente(cliente || null);
+                    }}
+                    value={selectedCliente?.clienteId || ''}
+                    required
+                >
+                    <option value="">Selecione um cliente</option>
+                    {filteredClientes.map((cliente) => (
+                        <option key={cliente.clienteId} value={cliente.clienteId}>
+                            {cliente.nome} {cliente.nalistaNegra && '⚠️'}
+                        </option>
+                    ))}
+                </select>
                                     {selectedCliente?.nalistaNegra && (
                                         <div className="mt-2 text-warning flex items-center gap-2 text-sm">
                                             <AlertTriangle className="w-4 h-4" />
@@ -315,14 +382,21 @@ export default function EmprestimosPage() {
       className="input input-success w-full"
       value={formData.valor}
       onChange={(e) => {
-        // Remover todos os caracteres não numéricos, exceto o ponto decimal
-        const formattedValue = e.target.value.replace(/[^0-9.]/g, '');
+        let rawValue = e.target.value.replace(/[^\d]/g, ''); // Remove caracteres não numéricos
+        let numericValue = parseFloat(rawValue) / 100; // Converte para número e ajusta para centavos
+        const formattedValue = isNaN(numericValue)
+          ? ''
+          : new Intl.NumberFormat('pt-BR', {
+              style: 'currency',
+              currency: 'BRL',
+            }).format(numericValue);
         setFormData((prev) => ({ ...prev, valor: formattedValue }));
       }}
       required
     />
   </div>
 </div>
+
                                 </motion.div>
 
                                 <motion.div
