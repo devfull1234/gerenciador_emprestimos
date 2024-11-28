@@ -124,12 +124,12 @@ export default function EmprestimosPage() {
             const filtered = clientes.filter(cliente => {
                 return cliente.local_de_trabalho === selectedWorkplace;
             });
-                setFilteredClientes(filtered);
+            setFilteredClientes(filtered);
         } else {
             setFilteredClientes(clientes);
         }
     }, [selectedWorkplace, clientes]);
-    
+
 
     const fetchValorDisponivel = async (uid: string) => {
         try {
@@ -152,13 +152,13 @@ export default function EmprestimosPage() {
                 cliente.clienteId = doc.id;
                 return cliente;
             });
-    
+
             // Carregar todos os documentos da lista negra de uma só vez
             const listaNegraRef = collection(db, `empresas/${uid}/lista_negra`);
             const listaNegraSnap = await getDocs(
                 query(listaNegraRef, where('ativo', '==', true))
             );
-    
+
             // Extrair os IDs dos clientes na lista negra em um conjunto (Set)
             const listaNegraIds = new Set<string>();
             listaNegraSnap.forEach((doc) => {
@@ -167,60 +167,57 @@ export default function EmprestimosPage() {
                     listaNegraIds.add(data.clienteId); // Adiciona clienteId dos documentos ativos
                 }
             });
-    
+
             // Atualizar `nalistaNegra` em cada cliente com base na presença na lista negra
             const clientesComListaNegra = clientesData.map((cliente) => {
                 cliente.nalistaNegra = listaNegraIds.has(cliente.clienteId); // Verifica se clienteId está na lista negra
                 return cliente;
             });
-    
+
             // Atualizar o estado com os clientes e suas flags de lista negra
             setClientes(clientesComListaNegra);
         } catch (error) {
             console.error('Erro ao buscar clientes e lista negra:', error);
         }
     };
-    
+
 
     const calcularJuros = () => {
-        // Remove separadores de milhares e ajusta o formato decimal
-        const valorLimpo = formData.valor.replace(/\./g, '').replace(',', '.').replace(/[^\d.-]/g, '');
-        const valor = parseFloat(valorLimpo);
+        const valorBase = parseFloat(formData.valor);
         const porcentagem = parseFloat(formData.porcentagem);
-    
-        console.log("Valor Limpo:", valor); // Log para verificar o valor limpo
-        console.log("Porcentagem:", porcentagem); // Log para verificar a porcentagem
-    
-        if (!isNaN(valor) && !isNaN(porcentagem)) {
-            const valorComJuros = valor + (valor * (porcentagem / 100));
-            console.log("Valor com Juros Calculado:", valorComJuros); // Log do resultado final
+
+        console.log("Valor base:", valorBase);
+        console.log("Porcentagem:", porcentagem);
+
+        if (!isNaN(valorBase) && !isNaN(porcentagem)) {
+            const valorComJuros = valorBase * (1 + (porcentagem / 100));
+            console.log("Valor com Juros:", valorComJuros);
+
             setFormData(prev => ({
                 ...prev,
                 valorComJuros: valorComJuros.toFixed(2)
             }));
         } else {
-            console.error("Erro no cálculo dos juros: Valor ou porcentagem inválidos.");
+            console.error("Erro no cálculo dos juros: Valor ou porcentagem inválidos");
         }
     };
-    
-    
 
     const calcularParcelas = () => {
         const totalParcelas = parseInt(formData.total_parcelas);
         const valorComJuros = parseFloat(formData.valorComJuros);
         const dataPagamentoInicial = new Date(formData.data_pagamento);
-    
+
         if (isNaN(totalParcelas) || isNaN(valorComJuros) || isNaN(dataPagamentoInicial.getTime())) {
             return [];
         }
-    
+
         const valorParcela = valorComJuros / totalParcelas;
         const parcelas = [];
-    
+
         for (let i = 0; i < totalParcelas; i++) {
             const dataParcela = new Date(dataPagamentoInicial);
             dataParcela.setMonth(dataParcela.getMonth() + i);
-            
+
             parcelas.push({
                 numero: i + 1,
                 valor: valorParcela.toFixed(2),
@@ -228,67 +225,85 @@ export default function EmprestimosPage() {
                 status: i < parseInt(formData.parcelas_pagas) ? "Paga" : "Pendente"
             });
         }
-    
+
         return parcelas;
     };
-    
-      
 
-      const handleSubmit = async (e: React.FormEvent) => {
+
+
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!userId || !selectedCliente) return;
-      
+        if (!userId || !selectedCliente) {
+            console.warn('Usuário ou cliente não selecionado.');
+            return;
+        }
+
         setLoading(true);
+
         try {
-          const novoValorDisponivel = valorDisponivel - parseFloat(formData.valor);
-          if (novoValorDisponivel < 0) {
-            throw new Error('Valor indisponível para empréstimo');
-          }
-      
-          const emprestimosID = `EMP${Date.now()}${Math.random().toString(36).substr(2, 5)}`.toUpperCase();
-          const parcelas = calcularParcelas();
-      
-          await setDoc(
-            doc(db, `empresas/${userId}/emprestimos/${emprestimosID}`),
-            {
-              ...formData,
-              taxa_juros: formData.porcentagem,
-              cliente: selectedCliente.clienteId,
-              data_criacao: new Date().toISOString(),
-              parcelas,
+            const valorBase = parseFloat(formData.valor);
+            console.log('Valor base:', valorBase);
+            console.log('Valor disponível para empréstimos:', valorDisponivel);
+
+            if (valorBase > valorDisponivel) {
+                console.error('Erro: Valor solicitado é maior que o disponível.');
+                throw new Error('Valor indisponível para empréstimo');
             }
-          );
-      
-          await updateDoc(doc(db, `empresas/${userId}`), {
-            valor_emprestimo: novoValorDisponivel
-          });
-      
-          setValorDisponivel(novoValorDisponivel);
-          setShowSuccessModal(true);
-      
-          setFormData({
-            valor: '',
-            porcentagem: '',
-            total_parcelas: '',
-            forma_pagamento: '',
-            tipo_pagamento: '',
-            data_pagamento: '',
-            negociacao: '',
-            parcelas_pagas: '0',
-            valorComJuros: ''
-          });
-          setSelectedCliente(null);
+
+            const novoValorDisponivel = valorDisponivel - valorBase;
+            console.log('Novo valor disponível após empréstimo:', novoValorDisponivel);
+
+            const emprestimosID = `EMP${Date.now()}${Math.random().toString(36).substr(2, 5)}`.toUpperCase();
+            console.log('ID gerado para o empréstimo:', emprestimosID);
+
+            const parcelas = calcularParcelas();
+            console.log('Parcelas calculadas:', parcelas);
+
+            console.log('Salvando dados do empréstimo...');
+            await setDoc(
+                doc(db, `empresas/${userId}/emprestimos/${emprestimosID}`),
+                {
+                    ...formData,
+                    valor: valorBase,
+                    valorComJuros: parseFloat(formData.valorComJuros),
+                    taxa_juros: formData.porcentagem,
+                    cliente: selectedCliente.clienteId,
+                    data_criacao: new Date().toISOString(),
+                    parcelas,
+                }
+            );
+
+            console.log('Atualizando valor disponível na empresa...');
+            await updateDoc(doc(db, `empresas/${userId}`), {
+                valor_emprestimo: novoValorDisponivel,
+            });
+
+            console.log('Empréstimo criado com sucesso!');
+            setValorDisponivel(novoValorDisponivel);
+            setShowSuccessModal(true);
+
+            setFormData({
+                valor: '',
+                porcentagem: '',
+                total_parcelas: '',
+                forma_pagamento: '',
+                tipo_pagamento: '',
+                data_pagamento: '',
+                negociacao: '',
+                parcelas_pagas: '0',
+                valorComJuros: ''
+            });
+            setSelectedCliente(null);
         } catch (error) {
             console.error('Erro ao criar empréstimo:', error);
             if (error.message === 'Valor indisponível para empréstimo') {
-              // Exibir uma mensagem de erro usando o componente Alert do DaisyUI
-              setShowErrorModal(true);
+                setShowErrorModal(true);
             }
-          } finally {
+        } finally {
             setLoading(false);
-          }
-      };
-      
+        }
+    };
+
 
     return (
         <div className="min-h-screen bg-gradient-to-b from-gray-50 to-green-50 dark:from-gray-900 dark:to-green-900 p-6">
@@ -313,50 +328,50 @@ export default function EmprestimosPage() {
 
                         <form onSubmit={handleSubmit}>
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                            <motion.div whileHover={{ scale: 1.01 }} className="form-control">
-                <label className="label">
-                    <span className="label-text flex items-center gap-2">
-                        <Building className="w-4 h-4" />
-                        Local de Trabalho
-                    </span>
-                </label>
-                <select
-                    className="select select-success w-full"
-                    onChange={(e) => setSelectedWorkplace(e.target.value)}
-                    value={selectedWorkplace}
-                >
-                    <option value="">Todos os locais</option>
-                    {workplaces.map((workplace) => (
-                        <option key={workplace.id} value={workplace.nome}>
-                            {workplace.nome}
-                        </option>
-                    ))}
-                </select>
-            </motion.div>
+                                <motion.div whileHover={{ scale: 1.01 }} className="form-control">
+                                    <label className="label">
+                                        <span className="label-text flex items-center gap-2">
+                                            <Building className="w-4 h-4" />
+                                            Local de Trabalho
+                                        </span>
+                                    </label>
+                                    <select
+                                        className="select select-success w-full"
+                                        onChange={(e) => setSelectedWorkplace(e.target.value)}
+                                        value={selectedWorkplace}
+                                    >
+                                        <option value="">Todos os locais</option>
+                                        {workplaces.map((workplace) => (
+                                            <option key={workplace.id} value={workplace.nome}>
+                                                {workplace.nome}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </motion.div>
 
-            <motion.div whileHover={{ scale: 1.01 }} className="form-control">
-                <label className="label">
-                    <span className="label-text flex items-center gap-2">
-                        <UserCheck className="w-4 h-4" />
-                        Cliente
-                    </span>
-                </label>
-                <select
-                    className="select select-success w-full"
-                    onChange={(e) => {
-                        const cliente = filteredClientes.find(c => c.clienteId === e.target.value);
-                        setSelectedCliente(cliente || null);
-                    }}
-                    value={selectedCliente?.clienteId || ''}
-                    required
-                >
-                    <option value="">Selecione um cliente</option>
-                    {filteredClientes.map((cliente) => (
-                        <option key={cliente.clienteId} value={cliente.clienteId}>
-                            {cliente.nome} {cliente.nalistaNegra && '⚠️'}
-                        </option>
-                    ))}
-                </select>
+                                <motion.div whileHover={{ scale: 1.01 }} className="form-control">
+                                    <label className="label">
+                                        <span className="label-text flex items-center gap-2">
+                                            <UserCheck className="w-4 h-4" />
+                                            Cliente
+                                        </span>
+                                    </label>
+                                    <select
+                                        className="select select-success w-full"
+                                        onChange={(e) => {
+                                            const cliente = filteredClientes.find(c => c.clienteId === e.target.value);
+                                            setSelectedCliente(cliente || null);
+                                        }}
+                                        value={selectedCliente?.clienteId || ''}
+                                        required
+                                    >
+                                        <option value="">Selecione um cliente</option>
+                                        {filteredClientes.map((cliente) => (
+                                            <option key={cliente.clienteId} value={cliente.clienteId}>
+                                                {cliente.nome} {cliente.nalistaNegra && '⚠️'}
+                                            </option>
+                                        ))}
+                                    </select>
                                     {selectedCliente?.nalistaNegra && (
                                         <div className="mt-2 text-warning flex items-center gap-2 text-sm">
                                             <AlertTriangle className="w-4 h-4" />
@@ -369,33 +384,40 @@ export default function EmprestimosPage() {
                                     whileHover={{ scale: 1.01 }}
                                     className="form-control"
                                 >
-<div className="form-control">
-  <label className="label">
-    <span className="label-text flex items-center gap-2">
-      <DollarSign className="w-4 h-4" />
-      Valor (Adicione somente números)
-    </span>
-  </label>
-  <div className="relative">
-    <input
-      type="text"
-      className="input input-success w-full"
-      value={formData.valor}
-      onChange={(e) => {
-        let rawValue = e.target.value.replace(/[^\d]/g, ''); // Remove caracteres não numéricos
-        let numericValue = parseFloat(rawValue) / 100; // Converte para número e ajusta para centavos
-        const formattedValue = isNaN(numericValue)
-          ? ''
-          : new Intl.NumberFormat('pt-BR', {
-              style: 'currency',
-              currency: 'BRL',
-            }).format(numericValue);
-        setFormData((prev) => ({ ...prev, valor: formattedValue }));
-      }}
-      required
-    />
-  </div>
-</div>
+                                    <div className="form-control">
+                                        <label className="label">
+                                            <span className="label-text flex items-center gap-2">
+                                                <DollarSign className="w-4 h-4" />
+                                                Valor (Adicione somente números)
+                                            </span>
+                                        </label>
+                                        <div className="relative">
+                                            <input
+                                                type="text"
+                                                className="input input-success w-full"
+                                                value={formData.valor === '' ? '' : new Intl.NumberFormat('pt-BR', {
+                                                    style: 'currency',
+                                                    currency: 'BRL',
+                                                }).format(parseFloat(formData.valor))}
+                                                onChange={(e) => {
+                                                    const rawValue = e.target.value.replace(/[^\d]/g, '');
+
+                                                    if (rawValue === '') {
+                                                        setFormData(prev => ({ ...prev, valor: '' }));
+                                                        return;
+                                                    }
+
+                                                    const numericValue = parseFloat(rawValue) / 100;
+                                                    setFormData(prev => ({ ...prev, valor: numericValue.toString() }));
+                                                }}
+                                                required
+                                            />
+
+
+
+
+                                        </div>
+                                    </div>
 
                                 </motion.div>
 
@@ -522,31 +544,31 @@ export default function EmprestimosPage() {
                                         </>
                                     )}
                                 </button>
-                                
+
                             </motion.div>
                         </form>
                     </div>
                     {calcularParcelas().map(parcela => (
-    <div
-        key={parcela.numero}
-        className={`flex justify-between p-2 border-b ${parcela.status === 'Paga' ? 'bg-green-100 text-green-700' : ' text-green-700'}`}
-    >
-        <span className="flex items-center gap-2">
-            <CreditCard className="w-5 h-5" />
-            Parcela {parcela.numero}
-        </span>
-        <span>R$ {parcela.valor}</span>
-        <span>{parcela.data}</span>
-        <span className="flex items-center gap-2">
-            {parcela.status === "Paga" ? <CheckCircle2 className="w-5 h-5 text-green-600" /> : <AlertCircle className="w-5 h-5 text-yellow-600" />}
-            {parcela.status}
-        </span>
-    </div>
-))}
+                        <div
+                            key={parcela.numero}
+                            className={`flex justify-between p-2 border-b ${parcela.status === 'Paga' ? 'bg-green-100 text-green-700' : ' text-green-700'}`}
+                        >
+                            <span className="flex items-center gap-2">
+                                <CreditCard className="w-5 h-5" />
+                                Parcela {parcela.numero}
+                            </span>
+                            <span>R$ {parcela.valor}</span>
+                            <span>{parcela.data}</span>
+                            <span className="flex items-center gap-2">
+                                {parcela.status === "Paga" ? <CheckCircle2 className="w-5 h-5 text-green-600" /> : <AlertCircle className="w-5 h-5 text-yellow-600" />}
+                                {parcela.status}
+                            </span>
+                        </div>
+                    ))}
 
 
                 </div>
-                
+
             </motion.div>
 
             {/* Modal de Sucesso */}
@@ -584,38 +606,38 @@ export default function EmprestimosPage() {
                 )}
             </AnimatePresence>
             <AnimatePresence>
-    {showErrorModal && (
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
-        className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
-        onClick={() => setShowErrorModal(false)}
-      >
-        <motion.div
-          initial={{ scale: 0.5, opacity: 0 }}
-          animate={{ scale: 1, opacity: 1 }}
-          exit={{ scale: 0.5, opacity: 0 }}
-          className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-xl max-w-md w-full mx-4"
-          onClick={(e) => e.stopPropagation()}
-        >
-          <div className="text-center">
-            <AlertCircle className="w-16 h-16 text-error mx-auto mb-4" />
-            <h3 className="text-lg font-semibold mb-2">Valor Indisponível</h3>
-            <p className="text-gray-600 dark:text-gray-400 mb-4">
-              O valor disponível para empréstimos é de R$ {valorDisponivel.toLocaleString('pt-BR')}.
-            </p>
-            <button
-              className="btn btn-error text-white"
-              onClick={() => setShowErrorModal(false)}
-            >
-              Entendi
-            </button>
-          </div>
-        </motion.div>
-      </motion.div>
-    )}
-  </AnimatePresence>
+                {showErrorModal && (
+                    <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+                        onClick={() => setShowErrorModal(false)}
+                    >
+                        <motion.div
+                            initial={{ scale: 0.5, opacity: 0 }}
+                            animate={{ scale: 1, opacity: 1 }}
+                            exit={{ scale: 0.5, opacity: 0 }}
+                            className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-xl max-w-md w-full mx-4"
+                            onClick={(e) => e.stopPropagation()}
+                        >
+                            <div className="text-center">
+                                <AlertCircle className="w-16 h-16 text-error mx-auto mb-4" />
+                                <h3 className="text-lg font-semibold mb-2">Valor Indisponível</h3>
+                                <p className="text-gray-600 dark:text-gray-400 mb-4">
+                                    O valor disponível para empréstimos é de R$ {valorDisponivel.toLocaleString('pt-BR')}.
+                                </p>
+                                <button
+                                    className="btn btn-error text-white"
+                                    onClick={() => setShowErrorModal(false)}
+                                >
+                                    Entendi
+                                </button>
+                            </div>
+                        </motion.div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
         </div>
     );
 }
