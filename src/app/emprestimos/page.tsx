@@ -30,7 +30,8 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import './styles.css';
-
+import ParcelasModal from '../../components/modal_calcular'
+import ConfirmationModal from '../../components/modal_confirmar'
 const firebaseConfig = {
     apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
     authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
@@ -78,7 +79,7 @@ export default function EmprestimosPage() {
     const [showSuccessModal, setShowSuccessModal] = useState(false);
     const [formData, setFormData] = useState<EmprestimoForm>({
         valor: '',
-        porcentagem: '',
+        porcentagem: '0',
         total_parcelas: '',
         forma_pagamento: '',
         tipo_pagamento: '',
@@ -91,6 +92,11 @@ export default function EmprestimosPage() {
     const [workplaces, setWorkplaces] = useState<Workplace[]>([]);
     const [selectedWorkplace, setSelectedWorkplace] = useState<string>('');
     const [filteredClientes, setFilteredClientes] = useState<Cliente[]>([]);
+    const [showParcelasModal, setShowParcelasModal] = useState(false);
+    const [parcelasEditaveis, setParcelasEditaveis] = useState([]);
+    const [calculationType, setCalculationType] = useState('total'); // 'total' or 'parcela'
+    const [valorParcela, setValorParcela] = useState('');
+    const [showConfirmationModal, setShowConfirmationModal] = useState(false);
 
     useEffect(() => {
         const unsubscribe = onAuthStateChanged(auth, (user) => {
@@ -202,108 +208,155 @@ export default function EmprestimosPage() {
         }
     };
 
+    const calcularPorParcela = () => {
+        const valorParcelaNum = parseFloat(valorParcela);
+        const totalParcelas = parseInt(formData.total_parcelas);
+        
+        if (!isNaN(valorParcelaNum) && !isNaN(totalParcelas)) {
+          const valorTotal = valorParcelaNum * totalParcelas;
+          const valorBase = valorTotal / (1 + (parseFloat(formData.porcentagem) / 100));
+          
+          setFormData(prev => ({
+            ...prev,
+            valor: valorBase.toFixed(2),
+            valorComJuros: valorTotal.toFixed(2)
+          }));
+        }
+      };
+
     const calcularParcelas = () => {
+        if (parcelasEditaveis.length > 0) {
+          return parcelasEditaveis;
+        }
+      
         const totalParcelas = parseInt(formData.total_parcelas);
         const valorComJuros = parseFloat(formData.valorComJuros);
         const dataPagamentoInicial = new Date(formData.data_pagamento);
-
+      
         if (isNaN(totalParcelas) || isNaN(valorComJuros) || isNaN(dataPagamentoInicial.getTime())) {
-            return [];
+          return [];
         }
-
+      
         const valorParcela = valorComJuros / totalParcelas;
         const parcelas = [];
-
+      
         for (let i = 0; i < totalParcelas; i++) {
-            const dataParcela = new Date(dataPagamentoInicial);
-            dataParcela.setMonth(dataParcela.getMonth() + i);
-
-            parcelas.push({
-                numero: i + 1,
-                valor: valorParcela.toFixed(2),
-                data: dataParcela.toLocaleDateString('pt-BR'),
-                status: i < parseInt(formData.parcelas_pagas) ? "Paga" : "Pendente"
-            });
+          const dataParcela = new Date(dataPagamentoInicial);
+          dataParcela.setMonth(dataParcela.getMonth() + i);
+      
+          parcelas.push({
+            numero: i + 1,
+            valor: valorParcela.toFixed(2),
+            data: dataParcela.toLocaleDateString('pt-BR'),
+            status: i < parseInt(formData.parcelas_pagas) ? "Paga" : "Pendente"
+          });
         }
-
+      
         return parcelas;
-    };
+      };
+
+    const handleParcelaChange = (index, field, value) => {
+        const novasParcelas = [...parcelasEditaveis];
+        if (field === "data") {
+          const newDate = new Date(value);
+          novasParcelas[index][field] = newDate.toLocaleDateString('pt-BR');
+        } else {
+          novasParcelas[index][field] = value;
+        }
+        setParcelasEditaveis(novasParcelas);
+      };
+      
+      // Updated recalcularTotal
+      const recalcularTotal = () => {
+        const novoTotal = parcelasEditaveis.reduce((acc, parcela) => 
+          acc + parseFloat(parcela.valor), 0);
+        
+        const porcentagem = parseFloat(formData.porcentagem);
+        const valorBase = novoTotal / (1 + (porcentagem / 100));
+        
+        setFormData(prev => ({
+          ...prev,
+          valor: valorBase.toFixed(2),
+          valorComJuros: novoTotal.toFixed(2)
+        }));
+      };
 
 
-
-    const handleSubmit = async (e: React.FormEvent) => {
+      const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
+        setShowConfirmationModal(true);
+      };
+      
+      const handleConfirmEmprestimo = async () => {
         if (!userId || !selectedCliente) {
-            console.warn('Usuário ou cliente não selecionado.');
-            return;
+          console.warn('Usuário ou cliente não selecionado.');
+          return;
         }
-
+      
         setLoading(true);
-
         try {
-            const valorBase = parseFloat(formData.valor);
-            console.log('Valor base:', valorBase);
-            console.log('Valor disponível para empréstimos:', valorDisponivel);
-
-            if (valorBase > valorDisponivel) {
-                console.error('Erro: Valor solicitado é maior que o disponível.');
-                throw new Error('Valor indisponível para empréstimo');
+          const valorBase = parseFloat(formData.valor);
+          
+          if (valorBase > valorDisponivel) {
+            throw new Error('Valor indisponível para empréstimo');
+          }
+      
+          const parcelasParaSalvar = parcelasEditaveis.length > 0 ? 
+            parcelasEditaveis : calcularParcelas();
+      
+          const novoValorDisponivel = valorDisponivel - valorBase;
+          const emprestimosID = `EMP${Date.now()}${Math.random().toString(36).substr(2, 5)}`.toUpperCase();
+      
+          await setDoc(
+            doc(db, `empresas/${userId}/emprestimos/${emprestimosID}`),
+            {
+              ...formData,
+              valor: valorBase,
+              valorComJuros: parseFloat(formData.valorComJuros),
+              taxa_juros: formData.porcentagem,
+              cliente: selectedCliente.clienteId,
+              data_criacao: new Date().toISOString(),
+              parcelas: parcelasParaSalvar,
             }
-
-            const novoValorDisponivel = valorDisponivel - valorBase;
-            console.log('Novo valor disponível após empréstimo:', novoValorDisponivel);
-
-            const emprestimosID = `EMP${Date.now()}${Math.random().toString(36).substr(2, 5)}`.toUpperCase();
-            console.log('ID gerado para o empréstimo:', emprestimosID);
-
-            const parcelas = calcularParcelas();
-            console.log('Parcelas calculadas:', parcelas);
-
-            console.log('Salvando dados do empréstimo...');
-            await setDoc(
-                doc(db, `empresas/${userId}/emprestimos/${emprestimosID}`),
-                {
-                    ...formData,
-                    valor: valorBase,
-                    valorComJuros: parseFloat(formData.valorComJuros),
-                    taxa_juros: formData.porcentagem,
-                    cliente: selectedCliente.clienteId,
-                    data_criacao: new Date().toISOString(),
-                    parcelas,
-                }
-            );
-
-            console.log('Atualizando valor disponível na empresa...');
-            await updateDoc(doc(db, `empresas/${userId}`), {
-                valor_emprestimo: novoValorDisponivel,
-            });
-
-            console.log('Empréstimo criado com sucesso!');
-            setValorDisponivel(novoValorDisponivel);
-            setShowSuccessModal(true);
-
-            setFormData({
-                valor: '',
-                porcentagem: '',
-                total_parcelas: '',
-                forma_pagamento: '',
-                tipo_pagamento: '',
-                data_pagamento: '',
-                negociacao: '',
-                parcelas_pagas: '0',
-                valorComJuros: ''
-            });
-            setSelectedCliente(null);
+          );
+      
+          await updateDoc(doc(db, `empresas/${userId}`), {
+            valor_emprestimo: novoValorDisponivel,
+          });
+      
+          setValorDisponivel(novoValorDisponivel);
+          setShowConfirmationModal(false);
+          setShowSuccessModal(true);
+          setParcelasEditaveis([]);
+          setFormData({
+            valor: '',
+            porcentagem: '0',
+            total_parcelas: '',
+            forma_pagamento: '',
+            tipo_pagamento: '',
+            data_pagamento: '',
+            negociacao: '',
+            parcelas_pagas: '0',
+            valorComJuros: ''
+            
+          });
+          setValorParcela('');
+          setSelectedCliente(null);
         } catch (error) {
-            console.error('Erro ao criar empréstimo:', error);
-            if (error.message === 'Valor indisponível para empréstimo') {
-                setShowErrorModal(true);
-            }
+          console.error('Erro ao criar empréstimo:', error);
+          if (error.message === 'Valor indisponível para empréstimo') {
+            setShowErrorModal(true);
+          }
         } finally {
-            setLoading(false);
+          setLoading(false);
         }
-    };
+      };
 
+    const handleVerParcelas = () => {
+        const parcelas = calcularParcelas();
+        setParcelasEditaveis(parcelas);
+        setShowParcelasModal(true);
+      };
 
     return (
         <div className="min-h-screen bg-gradient-to-b from-gray-50 to-green-50 dark:from-gray-900 dark:to-green-900 p-6">
@@ -380,46 +433,77 @@ export default function EmprestimosPage() {
                                     )}
                                 </motion.div>
 
-                                <motion.div
-                                    whileHover={{ scale: 1.01 }}
-                                    className="form-control"
-                                >
-                                    <div className="form-control">
-                                        <label className="label">
-                                            <span className="label-text flex items-center gap-2">
-                                                <DollarSign className="w-4 h-4" />
-                                                Valor (Adicione somente números)
-                                            </span>
-                                        </label>
-                                        <div className="relative">
-                                            <input
-                                                type="text"
-                                                className="input input-success w-full"
-                                                value={formData.valor === '' ? '' : new Intl.NumberFormat('pt-BR', {
-                                                    style: 'currency',
-                                                    currency: 'BRL',
-                                                }).format(parseFloat(formData.valor))}
-                                                onChange={(e) => {
-                                                    const rawValue = e.target.value.replace(/[^\d]/g, '');
+                                <motion.div whileHover={{ scale: 1.01 }} className="form-control col-span-2">
+  <label className="label">
+    <span className="label-text">Tipo de Cálculo</span>
+  </label>
+  <select
+    className="select select-success"
+    value={calculationType}
+    onChange={(e) => setCalculationType(e.target.value)}
+  >
+    <option value="total">Calcular por valor total</option>
+    <option value="parcela">Calcular por valor da parcela</option>
+  </select>
+</motion.div>
 
-                                                    if (rawValue === '') {
-                                                        setFormData(prev => ({ ...prev, valor: '' }));
-                                                        return;
-                                                    }
+{calculationType === 'total' ? (
+  <motion.div whileHover={{ scale: 1.01 }} className="form-control">
+    <label className="label">
+      <span className="label-text flex items-center gap-2">
+        <DollarSign className="w-4 h-4" />
+        Valor Total
+      </span>
+    </label>
+    <input
+      type="text"
+      className="input input-success"
+      value={formData.valor === '' ? '' : new Intl.NumberFormat('pt-BR', {
+        style: 'currency',
+        currency: 'BRL',
+      }).format(parseFloat(formData.valor))}
+      onChange={(e) => {
+        const rawValue = e.target.value.replace(/[^\d]/g, '');
+        if (rawValue === '') {
+          setFormData(prev => ({ ...prev, valor: '' }));
+          return;
+        }
+        const numericValue = parseFloat(rawValue) / 100;
+        setFormData(prev => ({ ...prev, valor: numericValue.toString() }));
+      }}
+      required={calculationType === 'total'}
+    />
+  </motion.div>
+) : (
+  <motion.div whileHover={{ scale: 1.01 }} className="form-control">
+    <label className="label">
+      <span className="label-text flex items-center gap-2">
+        <DollarSign className="w-4 h-4" />
+        Valor por Parcela
+      </span>
+    </label>
+    <input
+      type="text"
+      className="input input-success"
+      value={valorParcela === '' ? '' : new Intl.NumberFormat('pt-BR', {
+        style: 'currency',
+        currency: 'BRL',
+      }).format(parseFloat(valorParcela))}
+      onChange={(e) => {
+        const rawValue = e.target.value.replace(/[^\d]/g, '');
+        if (rawValue === '') {
+          setValorParcela('');
+          return;
+        }
+        const numericValue = parseFloat(rawValue) / 100;
+        setValorParcela(numericValue.toString());
+      }}
+      required={calculationType === 'parcela'}
+    />
+  </motion.div>
+)}
 
-                                                    const numericValue = parseFloat(rawValue) / 100;
-                                                    setFormData(prev => ({ ...prev, valor: numericValue.toString() }));
-                                                }}
-                                                required
-                                            />
 
-
-
-
-                                        </div>
-                                    </div>
-
-                                </motion.div>
 
                                 <motion.div
                                     whileHover={{ scale: 1.01 }}
@@ -442,12 +526,12 @@ export default function EmprestimosPage() {
                                         <span className="text-lg">%</span> {/* Adiciona o símbolo % ao lado */}
 
                                         <button
-                                            type="button"
-                                            className="btn btn-success"
-                                            onClick={calcularJuros}
-                                        >
-                                            <Calculator className="w-5 h-5" />
-                                        </button>
+  type="button"
+  className="btn btn-success"
+  onClick={calculationType === 'total' ? calcularJuros : calcularPorParcela}
+>
+  <Calculator className="w-5 h-5" />
+</button>
                                     </div>
                                 </motion.div>
 
@@ -526,26 +610,36 @@ export default function EmprestimosPage() {
 
                             </div>
 
-                            <motion.div
-                                className="card-actions justify-end mt-6"
-                                whileHover={{ scale: 1.02 }}
-                            >
-                                <button
-                                    type="submit"
-                                    className={`btn btn-success text-white gap-2 ${loading ? 'loading' : ''}`}
-                                    disabled={loading}
-                                >
-                                    {loading ? (
-                                        'Processando...'
-                                    ) : (
-                                        <>
-                                            <FileText className="w-5 h-5" />
-                                            Criar Empréstimo
-                                        </>
-                                    )}
-                                </button>
+{/* Replace the existing card-actions div with this */}
+<motion.div
+    className="card-actions justify-end mt-6 gap-4"
+    whileHover={{ scale: 1.02 }}
+>
+    <button
+        type="button"
+        className="btn btn-info text-white gap-2"
+        onClick={handleVerParcelas}
+        disabled={!formData.valorComJuros || !formData.total_parcelas || !formData.data_pagamento}
+    >
+        <Calendar className="w-5 h-5" />
+        Ver Parcelas
+    </button>
 
-                            </motion.div>
+    <button
+        type="submit"
+        className={`btn btn-success text-white gap-2 ${loading ? 'loading' : ''}`}
+        disabled={loading}
+    >
+        {loading ? (
+            'Processando...'
+        ) : (
+            <>
+                <FileText className="w-5 h-5" />
+                Criar Empréstimo
+            </>
+        )}
+    </button>
+</motion.div>
                         </form>
                     </div>
                     {calcularParcelas().map(parcela => (
@@ -567,9 +661,28 @@ export default function EmprestimosPage() {
                     ))}
 
 
+
+{/* Add the ParcelasModal component */}
+<ParcelasModal
+    isOpen={showParcelasModal}
+    onClose={() => setShowParcelasModal(false)}
+    parcelas={parcelasEditaveis}
+    onParcelaChange={handleParcelaChange}
+    onRecalcular={recalcularTotal}
+/>
+
                 </div>
 
             </motion.div>
+
+            <ConfirmationModal
+  isOpen={showConfirmationModal}
+  onClose={() => setShowConfirmationModal(false)}
+  onConfirm={handleConfirmEmprestimo}
+  formData={formData}
+  selectedCliente={selectedCliente}
+  parcelasEditaveis={parcelasEditaveis}
+/>
 
             {/* Modal de Sucesso */}
             <AnimatePresence>

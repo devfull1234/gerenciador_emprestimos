@@ -58,6 +58,27 @@ export interface Cliente {
   emprestimos: Emprestimo[];
   local_de_trabalho: string;
   nalistanegra?: boolean;
+  contato: string;
+  cpf: string;
+  email: string;
+  endereco: string;
+  parceiro: string;
+  referencias: string;
+}
+
+interface EditableClientForm {
+  nome: string;
+  local_de_trabalho: string;
+  contato: string;
+  cpf: string;
+  email: string;
+  endereco: string;
+  parceiro: string;
+  referencias: string;
+ }
+
+interface EditableParcelaForm extends Omit<Parcela, 'status'> {
+  status: 'Paga' | 'Pendente';
 }
 
 const DebitsPage: React.FC = () => {
@@ -74,7 +95,13 @@ const DebitsPage: React.FC = () => {
   const [locaisDeTrabalho, setLocaisDeTrabalho] = useState<string[]>([]);
   const [showLocalModal, setShowLocalModal] = useState<boolean>(false);
   const [selectedLocal, setSelectedLocal] = useState<string | null>(null);
-  
+  const [editingParcela, setEditingParcela] = useState<EditableParcelaForm | null>(null);
+  const [showParcelaModal, setShowParcelaModal] = useState(false);
+  const [isNewParcela, setIsNewParcela] = useState(false);
+  const [selectedEmprestimoId, setSelectedEmprestimoId] = useState<string | null>(null);
+  const [editingClient, setEditingClient] = useState<EditableClientForm | null>(null);
+  const [showClientModal, setShowClientModal] = useState(false);
+
   // Effects
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
@@ -191,6 +218,128 @@ const DebitsPage: React.FC = () => {
     }
   };
 
+
+  const handleEditParcela = (emprestimo: Emprestimo, parcela: Parcela) => {
+    setSelectedEmprestimoId(emprestimo.id);
+    setEditingParcela(parcela);
+    setIsNewParcela(false);
+    setShowParcelaModal(true);
+  };
+  
+  const handleAddParcela = (emprestimo: Emprestimo) => {
+    const nextParcelaNum = (emprestimo.parcelas.length + 1).toString();
+    setSelectedEmprestimoId(emprestimo.id);
+    setEditingParcela({
+      numero: nextParcelaNum,
+      valor: "0",
+      data: new Date().toLocaleDateString(),
+      status: 'Pendente'
+    });
+    setIsNewParcela(true);
+    setShowParcelaModal(true);
+  };
+  
+  const handleDeleteParcela = async (emprestimo: Emprestimo, parcelaIndex: number) => {
+    if (!empresaId || !emprestimo?.id) return;
+  
+    try {
+      const updatedParcelas = emprestimo.parcelas.filter((_, index) => index !== parcelaIndex);
+      const parcelasPagas = updatedParcelas.filter(p => p.status === 'Paga').length;
+      const newTotal = calculateTotal(updatedParcelas);
+  
+      await updateDoc(doc(db, `empresas/${empresaId}/emprestimos/${emprestimo.id}`), {
+        parcelas: updatedParcelas,
+        parcelas_pagas: parcelasPagas.toString(),
+        total_parcelas: updatedParcelas.length.toString(),
+        valorComJuros: newTotal
+      });
+      
+      const updatedClients = clients.map(client => {
+        if (client.id === selectedClient?.id) {
+          const updatedEmprestimos = client.emprestimos.map(emp => {
+            if (emp.id === emprestimo.id) {
+              return {
+                ...emp,
+                parcelas: updatedParcelas,
+                parcelas_pagas: parcelasPagas.toString(),
+                total_parcelas: updatedParcelas.length.toString(),
+                valorComJuros: newTotal
+              };
+            }
+            return emp;
+          });
+          return { ...client, emprestimos: updatedEmprestimos };
+        }
+        return client;
+      });
+  
+      setClients(updatedClients);
+      setSelectedClient(updatedClients.find(c => c.id === selectedClient?.id) || null);
+    } catch (error) {
+      console.error('Error deleting installment:', error);
+    }
+  };
+  
+  const calculateTotal = (parcelas: Parcela[]): string => {
+    return parcelas.reduce((sum, parcela) => sum + Number(parcela.valor), 0).toString();
+  };
+
+  const handleSaveParcela = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!empresaId || !selectedEmprestimoId || !editingParcela || !selectedClient) return;
+  
+    try {
+      const emprestimo = selectedClient.emprestimos.find(e => e.id === selectedEmprestimoId);
+      if (!emprestimo) return;
+  
+      let updatedParcelas: Parcela[];
+      if (isNewParcela) {
+        updatedParcelas = [...emprestimo.parcelas, editingParcela];
+      } else {
+        updatedParcelas = emprestimo.parcelas.map(p => 
+          p.numero === editingParcela.numero ? editingParcela : p
+        );
+      }
+  
+      const parcelasPagas = updatedParcelas.filter(p => p.status === 'Paga').length;
+      const newTotal = calculateTotal(updatedParcelas);
+
+      await updateDoc(doc(db, `empresas/${empresaId}/emprestimos/${selectedEmprestimoId}`), {
+        parcelas: updatedParcelas,
+        parcelas_pagas: parcelasPagas.toString(),
+        total_parcelas: updatedParcelas.length.toString(),
+        valorComJuros: newTotal
+      });
+  
+      // Update local state
+      const updatedClients = clients.map(client => {
+        if (client.id === selectedClient.id) {
+          const updatedEmprestimos = client.emprestimos.map(emp => {
+            if (emp.id === selectedEmprestimoId) {
+              return {
+                ...emp,
+                parcelas: updatedParcelas,
+                parcelas_pagas: parcelasPagas.toString(),
+                total_parcelas: updatedParcelas.length.toString(),
+                valorComJuros: newTotal
+              };
+            }
+            return emp;
+          });
+          return { ...client, emprestimos: updatedEmprestimos };
+        }
+        return client;
+      });
+  
+      setClients(updatedClients);
+      setSelectedClient(updatedClients.find(c => c.id === selectedClient.id) || null);
+      setShowParcelaModal(false);
+    } catch (error) {
+      console.error('Error saving installment:', error);
+    }
+  };
+
+
   // Event handlers
   const handleUpdateParcelaStatus = async (
     emprestimo: Emprestimo,
@@ -261,6 +410,45 @@ const DebitsPage: React.FC = () => {
       console.error('Error updating installment:', error);
     }
   };
+
+
+  const handleSaveClient = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!empresaId || !selectedClient || !editingClient) return;
+   
+    try {
+      await updateDoc(doc(db, `empresas/${empresaId}/clientes/${selectedClient.id}`), {
+        nome: editingClient.nome,
+        local_de_trabalho: editingClient.local_de_trabalho,
+        contato: editingClient.contato,
+        cpf: editingClient.cpf, 
+        email: editingClient.email,
+        endereco: editingClient.endereco,
+        parceiro: editingClient.parceiro,
+        referencias: editingClient.referencias
+      });
+   
+      const updatedClients = clients.map(client => {
+        if (client.id === selectedClient.id) {
+          return {
+            ...client,
+            ...editingClient
+          };
+        }
+        return client;
+      });
+   
+      setClients(updatedClients);
+      setFilteredClients(updatedClients);
+      setSelectedClient({
+        ...selectedClient,
+        ...editingClient
+      });
+      setShowClientModal(false);
+    } catch (error) {
+      console.error('Error saving client:', error);
+    }
+   };
 
   const handleSendEmail = async (): Promise<void> => {
     // Implement email sending logic here
@@ -365,20 +553,178 @@ const DebitsPage: React.FC = () => {
   ))}
 </div>
 
+{showClientModal && editingClient && (
+  <div className="modal modal-open">
+    <div className="modal-box">
+      <h3 className="font-bold text-lg mb-4">Editar Cliente</h3>
+      <form onSubmit={handleSaveClient} className="space-y-4">
+        <div className="form-control">
+          <label className="label">
+            <span className="label-text">Nome</span>
+          </label>
+          <input
+            type="text"
+            className="input input-bordered"
+            value={editingClient.nome}
+            onChange={(e) => setEditingClient({
+              ...editingClient,
+              nome: e.target.value
+            })}
+          />
+        </div>
 
+        <div className="form-control">
+          <label className="label">
+            <span className="label-text">CPF</span>
+          </label>
+          <input
+            type="text"
+            className="input input-bordered"
+            value={editingClient.cpf}
+            onChange={(e) => setEditingClient({
+              ...editingClient,
+              cpf: e.target.value
+            })}
+          />
+        </div>
+
+        <div className="form-control">
+          <label className="label">
+            <span className="label-text">Email</span>
+          </label>
+          <input
+            type="email"
+            className="input input-bordered" 
+            value={editingClient.email}
+            onChange={(e) => setEditingClient({
+              ...editingClient,
+              email: e.target.value
+            })}
+          />
+        </div>
+
+        <div className="form-control">
+          <label className="label">
+            <span className="label-text">Contato</span>
+          </label>
+          <input
+            type="text"
+            className="input input-bordered"
+            value={editingClient.contato}
+            onChange={(e) => setEditingClient({
+              ...editingClient,
+              contato: e.target.value
+            })}
+          />
+        </div>
+
+        <div className="form-control">
+          <label className="label">
+            <span className="label-text">Endereço</span>
+          </label>
+          <input
+            type="text"
+            className="input input-bordered"
+            value={editingClient.endereco}
+            onChange={(e) => setEditingClient({
+              ...editingClient,
+              endereco: e.target.value
+            })}
+          />
+        </div>
+
+        <div className="form-control">
+          <label className="label">
+            <span className="label-text">Local de Trabalho</span>
+          </label>
+          <input
+            type="text"
+            className="input input-bordered"
+            value={editingClient.local_de_trabalho}
+            onChange={(e) => setEditingClient({
+              ...editingClient,
+              local_de_trabalho: e.target.value
+            })}
+          />
+        </div>
+
+        <div className="form-control">
+          <label className="label">
+            <span className="label-text">Parceiro</span>
+          </label>
+          <input
+            type="text" 
+            className="input input-bordered"
+            value={editingClient.parceiro}
+            onChange={(e) => setEditingClient({
+              ...editingClient,
+              parceiro: e.target.value
+            })}
+          />
+        </div>
+
+        <div className="form-control">
+          <label className="label">
+            <span className="label-text">Referências</span>
+          </label>
+          <input
+            type="text"
+            className="input input-bordered"
+            value={editingClient.referencias}
+            onChange={(e) => setEditingClient({
+              ...editingClient,
+              referencias: e.target.value
+            })}
+          />
+        </div>
+
+        <div className="modal-action">
+          <button type="submit" className="btn btn-primary">Salvar</button>
+          <button 
+            type="button" 
+            className="btn"
+            onClick={() => setShowClientModal(false)}
+          >
+            Cancelar
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+)}
       {/* Client Details Modal */}
       {showModal && selectedClient && (
   <div className="modal modal-open" onClick={() => setShowModal(false)}>
     <div className="modal-box max-w-4xl" onClick={(e) => e.stopPropagation()}>
-            <h3 className="font-bold text-lg mb-4 flex items-center gap-2">
-              {selectedClient.nome}
-              {selectedClient.nalistanegra && (
-                <span className="badge badge-warning gap-1">
-                  <AlertTriangle size={16} />
-                  Lista Negra
-                </span>
-              )}
-            </h3>
+    <h3 className="font-bold text-lg mb-4 flex items-center justify-between">
+  <div className="flex items-center gap-2">
+    {selectedClient.nome}
+    {selectedClient.nalistanegra && (
+      <span className="badge badge-warning gap-1">
+        <AlertTriangle size={16} />
+        Lista Negra
+      </span>
+    )}
+  </div>
+  <button
+    className="btn btn-sm btn-info"
+    onClick={() => {
+      setEditingClient({
+        nome: selectedClient.nome,
+        local_de_trabalho: selectedClient.local_de_trabalho,
+        contato: selectedClient.contato,
+        cpf: selectedClient.cpf,
+        email: selectedClient.email,
+        endereco: selectedClient.endereco,
+        parceiro: selectedClient.parceiro,
+        referencias: selectedClient.referencias
+      });
+      setShowClientModal(true);
+    }}
+  >
+    Editar Cliente
+  </button>
+</h3>
             
             {selectedClient.emprestimos.map((emprestimo, index) => (
               <div key={index} className="mb-6 p-4 bg-base-200 rounded-lg">
@@ -413,55 +759,75 @@ const DebitsPage: React.FC = () => {
                       </tr>
                     </thead>
                     <tbody>
-                      {emprestimo.parcelas.map((parcela, idx) => (
-                        <tr key={idx}>
-                          <td>{parcela.numero}</td>
-                          <td>R$ {parcela.valor}</td>
-                          <td>{parseDateString(parcela.data).toLocaleDateString()}</td>
-                          <td>
-                            <span className={`badge ${
-                              parcela.status === 'Paga' ? 'badge-success' : 'badge-warning'
-                            }`}>
-                              {parcela.status}
-                            </span>
-                          </td>
-                          <td>
-                            <div className="flex gap-2">
-                              <button
-                                className={`btn btn-xs ${
-                                  parcela.status === 'Paga' ? 'btn-error' : 'btn-success'
-                                }`}
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleUpdateParcelaStatus(
-                                    emprestimo,
-                                    idx,
-                                    parcela.status === 'Paga' ? 'Pendente' : 'Paga'
-                                  );
-                                }}
-                              >
-                                {parcela.status === 'Paga' ? 'Reverter' : 'Marcar Paga'}
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
+  {emprestimo.parcelas.map((parcela, idx) => (
+    <tr key={idx}>
+      <td>{parcela.numero}</td>
+      <td>R$ {parcela.valor}</td>
+      <td>{parseDateString(parcela.data).toLocaleDateString()}</td>
+      <td>
+        <span className={`badge ${parcela.status === 'Paga' ? 'badge-success' : 'badge-warning'}`}>
+          {parcela.status}
+        </span>
+      </td>
+      <td>
+        <div className="flex gap-2">
+          <button
+            className={`btn btn-xs ${parcela.status === 'Paga' ? 'btn-error' : 'btn-success'}`}
+            onClick={(e) => {
+              e.stopPropagation();
+              handleUpdateParcelaStatus(emprestimo, idx, parcela.status === 'Paga' ? 'Pendente' : 'Paga');
+            }}
+          >
+            {parcela.status === 'Paga' ? 'Reverter' : 'Marcar Paga'}
+          </button>
+          <button
+            className="btn btn-xs btn-info"
+            onClick={(e) => {
+              e.stopPropagation();
+              handleEditParcela(emprestimo, parcela);
+            }}
+          >
+            Editar
+          </button>
+          <button
+            className="btn btn-xs btn-error"
+            onClick={(e) => {
+              e.stopPropagation();
+              handleDeleteParcela(emprestimo, idx);
+            }}
+          >
+            Excluir
+          </button>
+          
+        </div>
+      </td>
+    </tr>
+  ))}
+</tbody>
                   </table>
                 </div>
 
-                <div className="mt-4 flex gap-2 justify-end">
-                  <button
-                    className="btn btn-info gap-2"
-                    onClick={() => {
-                      setShowEmailModal(true);
-                      setEmailMessage(`Prezado(a) ${selectedClient.nome},\n\nEstamos entrando em contato referente ao seu empréstimo...`);
-                    }}
-                  >
-                    <Mail size={20} />
-                    Cobrar
-                  </button>
-                </div>
+                <div className="mt-4 flex gap-2 justify-between">
+  <button
+    className="btn btn-primary gap-2"
+    onClick={(e) => {
+      e.stopPropagation();
+      handleAddParcela(emprestimo);
+    }}
+  >
+    Nova Parcela
+  </button>
+  <button
+    className="btn btn-info gap-2"
+    onClick={() => {
+      setShowEmailModal(true);
+      setEmailMessage(`Prezado(a) ${selectedClient.nome},\n\nEstamos entrando em contato referente ao seu empréstimo...`);
+    }}
+  >
+    <Mail size={20} />
+    Cobrar
+  </button>
+</div>
               </div>
             ))}
 
@@ -471,6 +837,224 @@ const DebitsPage: React.FC = () => {
           </div>
         </div>
       )}
+
+{showParcelaModal && editingParcela && (
+  <div className="modal modal-open">
+    <div className="modal-box">
+      <h3 className="font-bold text-lg mb-4">
+        {isNewParcela ? 'Nova Parcela' : 'Editar Parcela'}
+      </h3>
+      <form onSubmit={handleSaveParcela}>
+        <div className="form-control">
+          <label className="label">
+            <span className="label-text">Número</span>
+          </label>
+          <input
+            type="text"
+            className="input input-bordered"
+            value={editingParcela.numero}
+            onChange={(e) => setEditingParcela({
+              ...editingParcela,
+              numero: e.target.value
+            })}
+          />
+        </div>
+        <div className="form-control">
+          <label className="label">
+            <span className="label-text">Valor</span>
+          </label>
+          <input
+            type="text"
+            className="input input-bordered"
+            value={editingParcela.valor}
+            onChange={(e) => setEditingParcela({
+              ...editingParcela,
+              valor: e.target.value
+            })}
+          />
+        </div>
+        <div className="form-control">
+          <label className="label">
+            <span className="label-text">Data</span>
+          </label>
+          <input
+            type="date"
+            className="input input-bordered"
+            value={editingParcela.data.split('/').reverse().join('-')}
+            onChange={(e) => {
+              const date = new Date(e.target.value);
+              setEditingParcela({
+                ...editingParcela,
+                data: date.toLocaleDateString()
+              });
+            }}
+          />
+        </div>
+        <div className="form-control">
+          <label className="label">
+            <span className="label-text">Status</span>
+          </label>
+          <select
+            className="select select-bordered"
+            value={editingParcela.status}
+            onChange={(e) => setEditingParcela({
+              ...editingParcela,
+              status: e.target.value as 'Paga' | 'Pendente'
+            })}
+          >
+            <option value="Pendente">Pendente</option>
+            <option value="Paga">Paga</option>
+          </select>
+        </div>
+        <div className="modal-action">
+          <button type="submit" className="btn btn-primary">Salvar</button>
+          <button type="button" className="btn" onClick={() => setShowParcelaModal(false)}>Cancelar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+)}
+
+{showClientModal && editingClient && (
+  <div className="modal modal-open">
+    <div className="modal-box">
+      <h3 className="font-bold text-lg mb-4">Editar Cliente</h3>
+      <form onSubmit={handleSaveClient} className="space-y-4">
+        <div className="form-control">
+          <label className="label">
+            <span className="label-text">Nome</span>
+          </label>
+          <input
+            type="text"
+            className="input input-bordered"
+            value={editingClient.nome}
+            onChange={(e) => setEditingClient({
+              ...editingClient,
+              nome: e.target.value
+            })}
+          />
+        </div>
+
+        <div className="form-control">
+          <label className="label">
+            <span className="label-text">CPF</span>
+          </label>
+          <input
+            type="text"
+            className="input input-bordered"
+            value={editingClient.cpf}
+            onChange={(e) => setEditingClient({
+              ...editingClient,
+              cpf: e.target.value
+            })}
+          />
+        </div>
+
+        <div className="form-control">
+          <label className="label">
+            <span className="label-text">Email</span>
+          </label>
+          <input
+            type="email"
+            className="input input-bordered" 
+            value={editingClient.email}
+            onChange={(e) => setEditingClient({
+              ...editingClient,
+              email: e.target.value
+            })}
+          />
+        </div>
+
+        <div className="form-control">
+          <label className="label">
+            <span className="label-text">Contato</span>
+          </label>
+          <input
+            type="text"
+            className="input input-bordered"
+            value={editingClient.contato}
+            onChange={(e) => setEditingClient({
+              ...editingClient,
+              contato: e.target.value
+            })}
+          />
+        </div>
+
+        <div className="form-control">
+          <label className="label">
+            <span className="label-text">Endereço</span>
+          </label>
+          <input
+            type="text"
+            className="input input-bordered"
+            value={editingClient.endereco}
+            onChange={(e) => setEditingClient({
+              ...editingClient,
+              endereco: e.target.value
+            })}
+          />
+        </div>
+
+        <div className="form-control">
+          <label className="label">
+            <span className="label-text">Local de Trabalho</span>
+          </label>
+          <input
+            type="text"
+            className="input input-bordered"
+            value={editingClient.local_de_trabalho}
+            onChange={(e) => setEditingClient({
+              ...editingClient,
+              local_de_trabalho: e.target.value
+            })}
+          />
+        </div>
+
+        <div className="form-control">
+          <label className="label">
+            <span className="label-text">Parceiro</span>
+          </label>
+          <input
+            type="text" 
+            className="input input-bordered"
+            value={editingClient.parceiro}
+            onChange={(e) => setEditingClient({
+              ...editingClient,
+              parceiro: e.target.value
+            })}
+          />
+        </div>
+
+        <div className="form-control">
+          <label className="label">
+            <span className="label-text">Referências</span>
+          </label>
+          <input
+            type="text"
+            className="input input-bordered"
+            value={editingClient.referencias}
+            onChange={(e) => setEditingClient({
+              ...editingClient,
+              referencias: e.target.value
+            })}
+          />
+        </div>
+
+        <div className="modal-action">
+          <button type="submit" className="btn btn-primary">Salvar</button>
+          <button 
+            type="button" 
+            className="btn"
+            onClick={() => setShowClientModal(false)}
+          >
+            Cancelar
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+)}
+
 
       {/* Email Modal */}
       {showEmailModal && (
