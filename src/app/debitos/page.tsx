@@ -836,7 +836,7 @@ const DebitsPage: React.FC = () => {
                   </div>
                   <div>
                     <div className="text-sm opacity-70">Data de Início</div>
-                    <div className="font-semibold">{new Date(emprestimo.data_pagamento).toLocaleDateString()}</div>
+                    <div className="font-semibold">{emprestimo.data_pagamento}</div>
                   </div>
                 </div>
 
