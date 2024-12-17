@@ -12,7 +12,10 @@ import {
   getDoc, 
   doc, 
   updateDoc, 
-  getFirestore 
+  getFirestore, 
+  deleteDoc,
+  writeBatch,
+  where
 } from 'firebase/firestore';
 import { getAuth, onAuthStateChanged } from 'firebase/auth';
 import './styles.css';
@@ -165,13 +168,13 @@ const DebitsPage: React.FC = () => {
       const clientsRef = collection(db, `empresas/${empresaId}/clientes`);
       const emprestimosRef = collection(db, `empresas/${empresaId}/emprestimos`);
       const listanegraRef = collection(db, `empresas/${empresaId}/lista_negra`);
-
+  
       const [clientsSnapshot, listanegraSnapshot, emprestimosSnapshot] = await Promise.all([
         getDocs(clientsRef),
         getDocs(listanegraRef),
         getDocs(emprestimosRef)
       ]);
-
+  
       const clientsData: { [key: string]: Cliente } = {};
       const listanegraData: { [key: string]: boolean } = {};
       
@@ -182,17 +185,31 @@ const DebitsPage: React.FC = () => {
           emprestimos: [] 
         };
       });
-
+  
       listanegraSnapshot.forEach((doc) => {
         const data = doc.data();
         if (data.ativo) {
           listanegraData[data.clienteId] = true;
         }
       });
-
+  
       emprestimosSnapshot.forEach((doc) => {
         const emprestimo = doc.data() as Omit<Emprestimo, 'id'>;
         if (clientsData[emprestimo.cliente]) {
+          // Converter data_pagamento para 'dd/mm/yyyy'
+          const dataPagamentoDisplay = convertDateToDisplay(new Date(emprestimo.data_pagamento).toISOString().split('T')[0]);
+          emprestimo.data_pagamento = dataPagamentoDisplay;
+          
+          // Converter data_criacao para 'dd/mm/yyyy'
+          const dataCriacaoDisplay = convertDateToDisplay(new Date(emprestimo.data_criacao).toISOString().split('T')[0]);
+          emprestimo.data_criacao = dataCriacaoDisplay;
+          
+          // Converter parcelas.data para 'dd/mm/yyyy'
+          emprestimo.parcelas = emprestimo.parcelas.map(parcela => ({
+            ...parcela,
+            data: parcela.data // Assume que já está no formato 'dd/mm/yyyy'
+          }));
+  
           clientsData[emprestimo.cliente].emprestimos.push({
             id: doc.id,
             ...emprestimo
@@ -200,15 +217,15 @@ const DebitsPage: React.FC = () => {
           clientsData[emprestimo.cliente].nalistanegra = listanegraData[emprestimo.cliente] || false;
         }
       });
-
+  
       const sortedClients = Object.values(clientsData)
         .filter(client => client.emprestimos.length > 0)
         .sort((a, b) => {
-          const dateA = new Date(a.emprestimos[0]?.data_criacao || 0);
-          const dateB = new Date(b.emprestimos[0]?.data_criacao || 0);
+          const dateA = new Date(a.emprestimos[0]?.data_criacao.split('/').reverse().join('-'));
+          const dateB = new Date(b.emprestimos[0]?.data_criacao.split('/').reverse().join('-'));
           return sortOrder === 'asc' ? dateA.getTime() - dateB.getTime() : dateB.getTime() - dateA.getTime();
         });
-
+  
       setClients(sortedClients);
       setFilteredClients(sortedClients);
     } catch (error) {
@@ -217,27 +234,37 @@ const DebitsPage: React.FC = () => {
       setLoading(false);
     }
   };
+  
 
 
   const handleEditParcela = (emprestimo: Emprestimo, parcela: Parcela) => {
     setSelectedEmprestimoId(emprestimo.id);
-    setEditingParcela(parcela);
+    setEditingParcela({
+      ...parcela,
+      data: parcela.data // Já está no formato 'dd/mm/yyyy'
+    });
     setIsNewParcela(false);
     setShowParcelaModal(true);
   };
   
+  
   const handleAddParcela = (emprestimo: Emprestimo) => {
     const nextParcelaNum = (emprestimo.parcelas.length + 1).toString();
+    const today = new Date().toISOString().split('T')[0]; // Formato 'yyyy-mm-dd'
+    const dataDisplay = convertDateToDisplay(today); // 'dd/mm/yyyy'
+  
     setSelectedEmprestimoId(emprestimo.id);
     setEditingParcela({
       numero: nextParcelaNum,
       valor: "0",
-      data: new Date().toLocaleDateString(),
+      data: dataDisplay, // Armazena no formato 'dd/mm/yyyy'
       status: 'Pendente'
     });
     setIsNewParcela(true);
     setShowParcelaModal(true);
   };
+  
+  
   
   const handleDeleteParcela = async (emprestimo: Emprestimo, parcelaIndex: number) => {
     if (!empresaId || !emprestimo?.id) return;
@@ -284,6 +311,25 @@ const DebitsPage: React.FC = () => {
     return parcelas.reduce((sum, parcela) => sum + Number(parcela.valor), 0).toString();
   };
 
+  const formatDateToDisplay = (dataISO: string): string => {
+    const date = new Date(dataISO);
+    const day = String(date.getDate()).padStart(2, '0');
+    const month = String(date.getMonth() + 1).padStart(2, '0'); // Janeiro é 0
+    const year = date.getFullYear();
+    return `${day}/${month}/${year}`;
+  };
+  
+  const convertDateToDisplay = (dateISO: string): string => {
+    const [year, month, day] = dateISO.split('-');
+    return `${day}/${month}/${year}`;
+  };
+
+  const convertDateToISO = (dateDisplay: string): string => {
+    const [day, month, year] = dateDisplay.split('/');
+    return `${year}-${month}-${day}`;
+  };
+
+
   const handleSaveParcela = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!empresaId || !selectedEmprestimoId || !editingParcela || !selectedClient) return;
@@ -294,16 +340,26 @@ const DebitsPage: React.FC = () => {
   
       let updatedParcelas: Parcela[];
       if (isNewParcela) {
-        updatedParcelas = [...emprestimo.parcelas, editingParcela];
+        updatedParcelas = [...emprestimo.parcelas, {
+          numero: editingParcela.numero,
+          valor: editingParcela.valor,
+          data: editingParcela.data, // 'dd/mm/yyyy'
+          status: editingParcela.status
+        }];
       } else {
         updatedParcelas = emprestimo.parcelas.map(p => 
-          p.numero === editingParcela.numero ? editingParcela : p
+          p.numero === editingParcela.numero 
+            ? { 
+                ...editingParcela, 
+                data: editingParcela.data // 'dd/mm/yyyy'
+              } 
+            : p
         );
       }
   
       const parcelasPagas = updatedParcelas.filter(p => p.status === 'Paga').length;
       const newTotal = calculateTotal(updatedParcelas);
-
+  
       await updateDoc(doc(db, `empresas/${empresaId}/emprestimos/${selectedEmprestimoId}`), {
         parcelas: updatedParcelas,
         parcelas_pagas: parcelasPagas.toString(),
@@ -311,7 +367,7 @@ const DebitsPage: React.FC = () => {
         valorComJuros: newTotal
       });
   
-      // Update local state
+      // Atualizar estado local
       const updatedClients = clients.map(client => {
         if (client.id === selectedClient.id) {
           const updatedEmprestimos = client.emprestimos.map(emp => {
@@ -335,9 +391,11 @@ const DebitsPage: React.FC = () => {
       setSelectedClient(updatedClients.find(c => c.id === selectedClient.id) || null);
       setShowParcelaModal(false);
     } catch (error) {
-      console.error('Error saving installment:', error);
+      console.error('Erro ao salvar parcela:', error);
     }
   };
+  
+  
 
 
   // Event handlers
@@ -462,6 +520,41 @@ const DebitsPage: React.FC = () => {
       </div>
     );
   }
+
+  const handleDeleteClient = async () => {
+    if (!empresaId || !selectedClient) return;
+  
+    const confirmDelete = window.confirm(`Tem certeza que deseja excluir o cliente "${selectedClient.nome}"? Esta ação é irreversível.`);
+    if (!confirmDelete) return;
+  
+    try {
+      // Remover o cliente da coleção 'clientes'
+      await deleteDoc(doc(db, `empresas/${empresaId}/clientes/${selectedClient.id}`));
+  
+      // Opcional: Remover todos os empréstimos associados ao cliente
+      const emprestimosRef = collection(db, `empresas/${empresaId}/emprestimos`);
+      const emprestimosQuery = query(emprestimosRef, where("cliente", "==", selectedClient.id));
+      const emprestimosSnapshot = await getDocs(emprestimosQuery);
+  
+      const batch = writeBatch(db);
+      emprestimosSnapshot.forEach(doc => {
+        batch.delete(doc.ref);
+      });
+      await batch.commit();
+  
+      // Atualizar o estado local
+      const updatedClients = clients.filter(client => client.id !== selectedClient.id);
+      setClients(updatedClients);
+      setFilteredClients(updatedClients);
+      setSelectedClient(null);
+      setShowClientModal(false);
+      setShowModal(false);
+    } catch (error) {
+      console.error('Erro ao excluir cliente:', error);
+      alert('Ocorreu um erro ao tentar excluir o cliente. Por favor, tente novamente.');
+    }
+  };
+  
 
   const sendEmail: React.MouseEventHandler<HTMLButtonElement> = (event) => {
     // Lógica para enviar o email
@@ -763,7 +856,7 @@ const DebitsPage: React.FC = () => {
     <tr key={idx}>
       <td>{parcela.numero}</td>
       <td>R$ {parcela.valor}</td>
-      <td>{parseDateString(parcela.data).toLocaleDateString()}</td>
+      <td>{parcela.data}</td>
       <td>
         <span className={`badge ${parcela.status === 'Paga' ? 'badge-success' : 'badge-warning'}`}>
           {parcela.status}
@@ -874,22 +967,25 @@ const DebitsPage: React.FC = () => {
           />
         </div>
         <div className="form-control">
-          <label className="label">
-            <span className="label-text">Data</span>
-          </label>
-          <input
-            type="date"
-            className="input input-bordered"
-            value={editingParcela.data.split('/').reverse().join('-')}
-            onChange={(e) => {
-              const date = new Date(e.target.value);
-              setEditingParcela({
-                ...editingParcela,
-                data: date.toLocaleDateString()
-              });
-            }}
-          />
-        </div>
+  <label className="label">
+    <span className="label-text">Data</span>
+  </label>
+  <input
+    type="date"
+    className="input input-bordered"
+    value={convertDateToISO(editingParcela.data)} // Converte 'dd/mm/yyyy' para 'yyyy-mm-dd' para o input
+    onChange={(e) => {
+      const dateISO = e.target.value; // 'yyyy-mm-dd'
+      const dateDisplay = convertDateToDisplay(dateISO); // 'dd/mm/yyyy'
+      setEditingParcela({
+        ...editingParcela,
+        data: dateDisplay
+      });
+    }}
+  />
+</div>
+
+
         <div className="form-control">
           <label className="label">
             <span className="label-text">Status</span>
@@ -1048,6 +1144,13 @@ const DebitsPage: React.FC = () => {
             onClick={() => setShowClientModal(false)}
           >
             Cancelar
+          </button>
+          <button 
+            type="button" 
+            className="btn btn-error"
+            onClick={handleDeleteClient}
+          >
+            Excluir Cliente
           </button>
         </div>
       </form>
