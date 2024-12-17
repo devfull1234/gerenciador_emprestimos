@@ -12,6 +12,7 @@
   "dependencies": {
     "@shadcn/ui": "^0.0.4",
     "@types/react-beautiful-dnd": "^13.1.8",
+    "date-fns": "^4.1.0",
     "firebase": "^11.0.1",
     "firebase-admin": "^12.7.0",
     "firebase-functions": "^6.1.0",
