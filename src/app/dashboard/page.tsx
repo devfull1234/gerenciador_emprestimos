@@ -28,6 +28,13 @@ import {
 } from 'lucide-react';
 import './styles.css';
 
+interface Parcela {
+    data: string;
+    numero: number;
+    status: string;
+    valor: string;
+}
+
 interface Cliente {
     id: string;
     nome: string;
@@ -41,6 +48,7 @@ interface Emprestimo {
     parcelas_pagas: number;
     total_parcelas: number;
     data_pagamento: string;
+    parcelas: Parcela[];
 }
 
 interface ListaNegra {
@@ -59,8 +67,10 @@ export default function Dashboard() {
     const [loading, setLoading] = useState(true);
     const [stats, setStats] = useState({
         parcelasAtrasadas: 0,
-      });
-      useEffect(() => {
+        totalParcelasPendentes: 0, // Adicionado
+    });
+
+    useEffect(() => {
         const fetchData = async () => {
             if (!user) return;
 
@@ -79,7 +89,8 @@ export default function Dashboard() {
                 const emprestimosSnapshot = await getDocs(emprestimosRef);
                 const emprestimosData = emprestimosSnapshot.docs.map(doc => ({
                     id: doc.id,
-                    ...doc.data()
+                    ...doc.data(),
+                    parcelas: doc.data().parcelas || [], // Garantir que parcelas seja um array
                 })) as Emprestimo[];
                 setEmprestimos(emprestimosData);
 
@@ -105,20 +116,29 @@ export default function Dashboard() {
         }
     }, [user, authLoading]);
 
-    const calculateStats = (emprestimosList) => {
+    const calculateStats = (emprestimosList: Emprestimo[]) => {
         const stats = emprestimosList.reduce((acc, emp) => {
-          const parcelas = emp.parcelas || [];
-          const parcelasAtrasadas = parcelas.filter(p => {
-          const parcelaDate = p.data.split('/').reverse().join('-');
-            return new Date(parcelaDate) < new Date();
-          }).length;      
-          return {
-            parcelasAtrasadas: acc.parcelasAtrasadas + parcelasAtrasadas,
+            const parcelas = emp.parcelas || [];
+            
+            // Contar parcelas atrasadas
+            const parcelasAtrasadas = parcelas.filter(p => {
+                const parcelaDate = p.data.split('/').reverse().join('-');
+                return new Date(parcelaDate) < new Date() && p.status === "Pendente";
+            }).length;      
 
-          };
-        }, { parcelasAtrasadas: 0});
+            // Somar valores das parcelas pendentes
+            const totalPendentes = parcelas
+                .filter(p => p.status === "Pendente")
+                .reduce((sum, p) => sum + parseFloat(p.valor.replace(',', '.')), 0);
+
+            return {
+                parcelasAtrasadas: acc.parcelasAtrasadas + parcelasAtrasadas,
+                totalParcelasPendentes: acc.totalParcelasPendentes + totalPendentes,
+            };
+        }, { parcelasAtrasadas: 0, totalParcelasPendentes: 0 });
+        
         setStats(stats);
-      };
+    };
 
     const totalEmprestado = emprestimos.reduce((acc, emp) => acc + parseFloat(emp.valor.toString().replace(',', '.')), 0);
     const totalClientes = clientes.length;
@@ -139,23 +159,23 @@ export default function Dashboard() {
             ) : (
                 <div className="p-4 space-y-6">
                     {/* Cards informativos */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 margin-left:250px;padding:20px;width:90%">
-                        <motion.div
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 margin-left:300px;padding:20px;width:100%">
+                    <motion.div
                             initial={{ opacity: 0, y: 20 }}
                             animate={{ opacity: 1, y: 0 }}
-                            transition={{ duration: 0.3 }}
+                            transition={{ duration: 0.3, delay: 0.4 }}
                             className="stats shadow bg-base-100 hover:shadow-lg transition-all duration-300"
                         >
                             <div className="stat">
-                                <div className="stat-figure text-success">
+                                <div className="stat-figure text-info">
                                     <DollarSign className="w-8 h-8" />
                                 </div>
-                                <div className="stat-title">Total Emprestado</div>
-                                <div className="stat-value text-success">
+                                <div className="stat-title">Total Empréstimo Pendente</div>
+                                <div className="stat-value text-info">
                                     {new Intl.NumberFormat('pt-BR', {
                                         style: 'currency',
                                         currency: 'BRL'
-                                    }).format(totalEmprestado)}
+                                    }).format(stats.totalParcelasPendentes)}
                                 </div>
                             </div>
                         </motion.div>
@@ -204,6 +224,7 @@ export default function Dashboard() {
                                 <div className="stat-value text-warning">{stats.parcelasAtrasadas}</div>
                             </div>
                         </motion.div>
+
                     </div>
 
                     {/* Gráficos */}
